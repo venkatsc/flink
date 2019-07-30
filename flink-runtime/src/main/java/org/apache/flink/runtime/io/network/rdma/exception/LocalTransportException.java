@@ -16,38 +16,19 @@
  * limitations under the License.
  */
 
-package org.apache.flink.runtime.io.network;
+package org.apache.flink.runtime.io.network.rdma.exception;
 
-import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
+import java.net.SocketAddress;
 
-/**
- * A connection manager implementation to bypass setup overhead for task managers running in local
- * execution mode.
- */
-public class LocalConnectionManager implements ConnectionManager {
+public class LocalTransportException extends TransportException {
 
-	@Override
-	public void start(ResultPartitionProvider partitionProvider, TaskEventDispatcher taskEventDispatcher) {
+	private static final long serialVersionUID = 2366708881288640674L;
+
+	public LocalTransportException(String message, SocketAddress address) {
+		super(message, address);
 	}
 
-	@Override
-	public PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId) {
-		return null;
+	public LocalTransportException(String message, SocketAddress address, Throwable cause) {
+		super(message, address, cause);
 	}
-
-	@Override
-	public void closeOpenChannelConnections(ConnectionID connectionId) {}
-
-	@Override
-	public int getNumberOfActiveConnections() {
-		return 0;
-	}
-
-	@Override
-	public int getDataPort() {
-		return -1;
-	}
-
-	@Override
-	public void shutdown() {}
 }
