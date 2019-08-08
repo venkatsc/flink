@@ -108,11 +108,11 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 		return availableFreeReceiveBuffersRegisteredMemory;
 	}
 
-	public void write(NettyMessage msg) {
+	public void write(RdmaMessage msg) {
 		// TODO (venkat):imp : pass buffer allocator
 		ByteBuf buf = null;
 		try {
-			buf = msg.write(null);
+			msg.writeTo(null);
 			sendBuffer.put(buf.nioBuffer());
 			RdmaSendReceiveUtil.postSendReq(this, ++workRequestId);
 			IbvWC wcSend = this.getWcEvents().take();
@@ -133,7 +133,7 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 				LOG.error("failed to send the request " + wc.getStatus());
 				// LOG the failure
 			}
-			NettyMessage.NettyMessageDecoder decoder = new NettyMessage.NettyMessageDecoder(false);
+			NettyMessage.NettyMessageDecoder decoder = new RdmaMessage.NettyMessageDecoder(false);
 			NettyMessage msg = (NettyMessage) decoder.decode(null, Unpooled.wrappedBuffer(this.receiveBuffer));
 			clientHandler.decodeMsg(msg, false, this);
 		} catch (Throwable e) {

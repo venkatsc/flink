@@ -53,8 +53,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.SocketAddress;
 
-import static org.apache.flink.runtime.io.network.rdma.NettyMessage.PartitionRequest;
-import static org.apache.flink.runtime.io.network.rdma.NettyMessage.TaskEventRequest;
+import static org.apache.flink.runtime.io.network.rdma.RdmaMessage.PartitionRequest;
+import static org.apache.flink.runtime.io.network.rdma.RdmaMessage.TaskEventRequest;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelFuture;
@@ -104,7 +104,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 	 * <p>Note: the reference counter has to be incremented before returning the
 	 * instance of this client to ensure correct closing logic.
 	 */
-	boolean incrementReferenceCounter() {
+	public boolean incrementReferenceCounter() {
 		return closeReferenceCounter.increment();
 	}
 
@@ -158,7 +158,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 			// Close the TCP connection. Send a close request msg to ensure
 			// that outstanding backwards task events are not discarded.
 			//			tcpChannel.writeAndFlush(new NettyMessage.CloseRequest());
-			clientEndpoint.write(new NettyMessage.CloseRequest());
+			clientEndpoint.write(new RdmaMessage.CloseRequest());
 
 			// Make sure to remove the client from the factory
 			clientFactory.destroyPartitionRequestClient(connectionId, this);

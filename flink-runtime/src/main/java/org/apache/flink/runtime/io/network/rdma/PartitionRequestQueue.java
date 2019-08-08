@@ -72,6 +72,11 @@ class PartitionRequestQueue {
 
 	private RdmaShuffleServerEndpoint endpoint;
 
+	public PartitionRequestQueue(RdmaShuffleServerEndpoint endpoint){
+		this.endpoint = endpoint ;
+	}
+
+
 //	private ChannelHandlerContext ctx;
 
 //	@Override

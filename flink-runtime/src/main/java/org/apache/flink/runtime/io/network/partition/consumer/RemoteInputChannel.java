@@ -23,12 +23,12 @@ import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.runtime.event.TaskEvent;
 import org.apache.flink.runtime.io.network.ConnectionID;
 import org.apache.flink.runtime.io.network.ConnectionManager;
+import org.apache.flink.runtime.io.network.PartitionRequestClientIf;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
 import org.apache.flink.runtime.io.network.buffer.BufferListener;
 import org.apache.flink.runtime.io.network.buffer.BufferProvider;
 import org.apache.flink.runtime.io.network.buffer.BufferRecycler;
 import org.apache.flink.runtime.io.network.buffer.NetworkBuffer;
-import org.apache.flink.runtime.io.network.netty.PartitionRequestClient;
 import org.apache.flink.runtime.io.network.partition.PartitionNotFoundException;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.metrics.groups.TaskIOMetricGroup;
@@ -77,7 +77,7 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 	private final AtomicBoolean isReleased = new AtomicBoolean();
 
 	/** Client to establish a (possibly shared) TCP connection and request the partition. */
-	private volatile PartitionRequestClient partitionRequestClient;
+	private volatile PartitionRequestClientIf partitionRequestClient;
 
 	/**
 	 * The next expected sequence number for the next buffer. This is modified by the network

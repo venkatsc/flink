@@ -85,7 +85,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 	 * <p>Note: the reference counter has to be incremented before returning the
 	 * instance of this client to ensure correct closing logic.
 	 */
-	boolean incrementReferenceCounter() {
+	public boolean incrementReferenceCounter() {
 		return closeReferenceCounter.increment();
 	}
 

@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.io.network.rdma;
 
 import org.apache.flink.runtime.io.network.ConnectionID;
+import org.apache.flink.runtime.io.network.PartitionRequestClientIf;
 import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel;
 
 //import org.apache.flink.shaded.netty4.io.netty.channel.Channel;
@@ -46,7 +47,7 @@ class PartitionRequestClientFactory {
 	 * Atomically establishes a TCP connection to the given remote address and
 	 * creates a {@link PartitionRequestClient} instance for this connection.
 	 */
-	PartitionRequestClient createPartitionRequestClient(ConnectionID connectionId) throws Exception {
+	PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId) throws Exception {
 		Object entry;
 		PartitionRequestClient client = null;
 		while (client == null) {

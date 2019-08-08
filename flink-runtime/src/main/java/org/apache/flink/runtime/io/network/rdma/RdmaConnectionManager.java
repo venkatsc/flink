@@ -22,7 +22,9 @@ import java.io.IOException;
 
 import org.apache.flink.runtime.io.network.ConnectionID;
 import org.apache.flink.runtime.io.network.ConnectionManager;
+import org.apache.flink.runtime.io.network.PartitionRequestClientIf;
 import org.apache.flink.runtime.io.network.TaskEventDispatcher;
+import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
 
 public class RdmaConnectionManager implements ConnectionManager {
@@ -33,14 +35,14 @@ public class RdmaConnectionManager implements ConnectionManager {
 
 	private PartitionRequestServerHandler serverHandler;
 
-	//	private final NettyBufferPool bufferPool; // TODO (venkat): we might want to allocate pool of buffers per
+	private final NettyBufferPool bufferPool = new NettyBufferPool(8); // TODO (venkat): we might want to allocate pool of buffers per
 	// connection
 	private final PartitionRequestClientFactory partitionRequestClientFactory;
 
 	public RdmaConnectionManager(RdmaConfig rdmaConfig) {
 
-		this.server = new RdmaServer(rdmaConfig, serverHandler);
-		this.client = new RdmaClient(rdmaConfig, new PartitionRequestClientHandler());
+		this.server = new RdmaServer(rdmaConfig, serverHandler,bufferPool);
+		this.client = new RdmaClient(rdmaConfig, new PartitionRequestClientHandler(), bufferPool);
 //		this.bufferPool = new NettyBufferPool(rdmaConfig.getNumberOfArenas());
 
 		this.partitionRequestClientFactory = new PartitionRequestClientFactory(client);
@@ -49,14 +51,13 @@ public class RdmaConnectionManager implements ConnectionManager {
 	@Override
 	public void start(ResultPartitionProvider partitionProvider, TaskEventDispatcher taskEventDispatcher) throws
 		IOException {
-		PartitionRequestQueue queueOfPartitionQueues = new PartitionRequestQueue();
+		PartitionRequestQueue queueOfPartitionQueues = new PartitionRequestQueue(server.getClientEndpoint());
 		this.serverHandler = new PartitionRequestServerHandler(
 			partitionProvider, taskEventDispatcher, queueOfPartitionQueues, false);
 	}
 
 	@Override
-	public PartitionRequestClient createPartitionRequestClient(ConnectionID connectionId) throws IOException,
-		InterruptedException {
+	public PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId) throws IOException, InterruptedException {
 		try {
 			return partitionRequestClientFactory.createPartitionRequestClient(connectionId);
 		} catch (Exception e) {

@@ -46,4 +46,6 @@ public interface PartitionRequestClientIf {
 	void notifyCreditAvailable(RemoteInputChannel inputChannel);
 
     void close(RemoteInputChannel inputChannel) throws IOException;
+
+	public boolean incrementReferenceCounter();
 }

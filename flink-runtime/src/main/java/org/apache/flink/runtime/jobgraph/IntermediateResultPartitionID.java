@@ -18,6 +18,8 @@
 
 package org.apache.flink.runtime.jobgraph;
 
+import java.nio.ByteBuffer;
+
 import org.apache.flink.util.AbstractID;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
@@ -42,9 +44,21 @@ public class IntermediateResultPartitionID extends AbstractID {
 		buf.writeLong(this.upperPart);
 	}
 
+
+	public void writeTo(ByteBuffer buf) {
+		buf.putLong(this.lowerPart);
+		buf.putLong(this.upperPart);
+	}
+
 	public static IntermediateResultPartitionID fromByteBuf(ByteBuf buf) {
 		long lower = buf.readLong();
 		long upper = buf.readLong();
+		return new IntermediateResultPartitionID(lower, upper);
+	}
+
+	public static IntermediateResultPartitionID fromByteBuf(ByteBuffer buf) {
+		long lower = buf.getLong();
+		long upper = buf.getLong();
 		return new IntermediateResultPartitionID(lower, upper);
 	}
 }
