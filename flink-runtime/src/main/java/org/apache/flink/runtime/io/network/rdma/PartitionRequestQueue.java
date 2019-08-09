@@ -18,7 +18,6 @@
 
 package org.apache.flink.runtime.io.network.rdma;
 
-import static org.apache.flink.runtime.io.network.rdma.NettyMessage.BufferResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,17 +30,12 @@ import java.util.concurrent.ConcurrentMap;
 import javax.annotation.Nullable;
 
 import org.apache.flink.shaded.guava18.com.google.common.collect.Sets;
-//import org.apache.flink.shaded.netty4.io.netty.channel.Channel;
-//import org.apache.flink.shaded.netty4.io.netty.channel.ChannelFuture;
-//import org.apache.flink.shaded.netty4.io.netty.channel.ChannelFutureListener;
-//import org.apache.flink.shaded.netty4.io.netty.channel.ChannelHandlerContext;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.runtime.io.network.NetworkSequenceViewReader;
 import org.apache.flink.runtime.io.network.api.EndOfPartitionEvent;
 import org.apache.flink.runtime.io.network.api.serialization.EventSerializer;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
-import org.apache.flink.runtime.io.network.rdma.NettyMessage.ErrorResponse;
 import org.apache.flink.runtime.io.network.partition.ProducerFailedException;
 import org.apache.flink.runtime.io.network.partition.consumer.InputChannel.BufferAndAvailability;
 import org.apache.flink.runtime.io.network.partition.consumer.InputChannelID;
@@ -50,11 +44,12 @@ import org.apache.flink.runtime.io.network.partition.consumer.InputChannelID;
  * A nonEmptyReader of partition queues, which listens for channel writability changed
  * events before writing and flushing {@link Buffer} instances.
  */
+
 class PartitionRequestQueue {
 
 	private static final Logger LOG = LoggerFactory.getLogger(PartitionRequestQueue.class);
 
-//	private final ChannelFutureListener writeListener = new WriteAndFlushNextMessageIfPossibleListener();
+	//	private final ChannelFutureListener writeListener = new WriteAndFlushNextMessageIfPossibleListener();
 
 	/**
 	 * The readers which are already enqueued available for transferring data.
@@ -76,18 +71,6 @@ class PartitionRequestQueue {
 		this.endpoint = endpoint ;
 	}
 
-
-//	private ChannelHandlerContext ctx;
-
-//	@Override
-//	public void channelRegistered(final ChannelHandlerContext ctx) throws Exception {
-//		if (this.ctx == null) {
-//			this.ctx = ctx;
-//		}
-//
-//		super.channelRegistered(ctx);
-//	}
-
 	void notifyReaderNonEmpty(final NetworkSequenceViewReader reader) {
 		// The notification might come from the same thread. For the initial writes this
 		// might happen before the reader has set its reference to the view, because
@@ -98,7 +81,7 @@ class PartitionRequestQueue {
 		// TODO This could potentially have a bad performance impact as in the
 		// worst case (network consumes faster than the producer) each buffer
 		// will trigger a separate event loop task being scheduled.
-//		ctx.executor().execute(() -> ctx.pipeline().fireUserEventTriggered(reader));
+		//		ctx.executor().execute(() -> ctx.pipeline().fireUserEventTriggered(reader));
 	}
 
 	/**
@@ -109,9 +92,9 @@ class PartitionRequestQueue {
 	 * availability, so there is no race condition here.
 	 */
 	private void enqueueAvailableReader(final NetworkSequenceViewReader reader) throws Exception {
-		if (reader.isRegisteredAsAvailable() || !reader.isAvailable()) {
-			return;
-		}
+		//		if (reader.isRegisteredAsAvailable() || !reader.isAvailable()) {
+		//			return;
+		//		}
 		// Queue an available reader for consumption. If the queue is empty,
 		// we try trigger the actual write. Otherwise this will be handled by
 		// the writeAndFlushNextMessageIfPossible calls.
@@ -194,7 +177,7 @@ class PartitionRequestQueue {
 
 					Throwable cause = reader.getFailureCause();
 					if (cause != null) {
-						ErrorResponse msg = new ErrorResponse(
+						RdmaMessage.ErrorResponse msg = new RdmaMessage.ErrorResponse(
 							new ProducerFailedException(cause),
 							reader.getReceiverId());
 
@@ -207,7 +190,7 @@ class PartitionRequestQueue {
 						registerAvailableReader(reader);
 					}
 
-					BufferResponse msg = new BufferResponse(
+					RdmaMessage.BufferResponse msg = new RdmaMessage.BufferResponse(
 						next.buffer(),
 						reader.getSequenceNumber(),
 						reader.getReceiverId(),
@@ -261,7 +244,7 @@ class PartitionRequestQueue {
 		releaseAllResources();
 // TODO (venkat):imp : do we need this check here?
 //		if (endpoint.isActive()) {
-		endpoint.write(new ErrorResponse(cause));
+		endpoint.write(new RdmaMessage.ErrorResponse(cause));
 //		}
 	}
 

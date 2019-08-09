@@ -30,8 +30,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.flink.shaded.guava18.com.google.common.collect.Maps;
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
-//import org.apache.flink.shaded.netty4.io.netty.channel.ChannelHandlerContext;
-//import org.apache.flink.shaded.netty4.io.netty.channel.ChannelInboundHandlerAdapter;
 
 import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.core.memory.MemorySegmentFactory;
@@ -50,6 +48,7 @@ import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel
  *
  * <p>It is used in the old network mode.
  */
+
 class PartitionRequestClientHandler {
 
 	private static final Logger LOG = LoggerFactory.getLogger(PartitionRequestClientHandler.class);
@@ -82,7 +81,7 @@ class PartitionRequestClientHandler {
 		}
 //TODO (venkat): imp: handle cancellation
 		if (cancelled.putIfAbsent(inputChannelId, inputChannelId) == null) {
-			clientEndpoint.write(new NettyMessage.CancelPartitionRequest(inputChannelId));
+//			clientEndpoint.write(new CancelPartitionRequest(inputChannelId));
 		}
 	}
 
@@ -120,8 +119,8 @@ class PartitionRequestClientHandler {
 		final Class<?> msgClazz = msg.getClass();
 
 		// ---- Buffer --------------------------------------------------------
-		if (msgClazz == NettyMessage.BufferResponse.class) {
-			NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) msg;
+		if (msgClazz == RdmaMessage.BufferResponse.class) {
+			RdmaMessage.BufferResponse bufferOrEvent = (RdmaMessage.BufferResponse) msg;
 
 			RemoteInputChannel inputChannel = inputChannels.get(bufferOrEvent.receiverId);
 			if (inputChannel == null) {
@@ -135,8 +134,8 @@ class PartitionRequestClientHandler {
 			return decodeBufferOrEvent(inputChannel, bufferOrEvent, isStagedBuffer, clientEndpoint);
 		}
 		// ---- Error ---------------------------------------------------------
-		else if (msgClazz == NettyMessage.ErrorResponse.class) {
-			NettyMessage.ErrorResponse error = (NettyMessage.ErrorResponse) msg;
+		else if (msgClazz == RdmaMessage.ErrorResponse.class) {
+			RdmaMessage.ErrorResponse error = (RdmaMessage.ErrorResponse) msg;
 
 //			SocketAddress remoteAddr = ctx.channel().remoteAddress();
 
@@ -164,13 +163,13 @@ class PartitionRequestClientHandler {
 		return true;
 	}
 
-	private boolean decodeBufferOrEvent(RemoteInputChannel inputChannel, NettyMessage.BufferResponse bufferOrEvent,
+	private boolean decodeBufferOrEvent(RemoteInputChannel inputChannel, RdmaMessage.BufferResponse bufferOrEvent,
 										boolean isStagedBuffer, RdmaShuffleClientEndpoint clientEndpoint) throws
 		Throwable {
 		boolean releaseNettyBuffer = true;
 
 		try {
-			ByteBuf nettyBuffer = bufferOrEvent.getNettyBuffer();
+			ByteBuf nettyBuffer = bufferOrEvent.getBuffer();
 			final int receivedSize = nettyBuffer.readableBytes();
 			if (bufferOrEvent.isBuffer()) {
 				// ---- Buffer ------------------------------------------------

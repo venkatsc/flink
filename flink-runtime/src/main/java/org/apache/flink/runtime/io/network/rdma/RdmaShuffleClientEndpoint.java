@@ -133,9 +133,9 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 				LOG.error("failed to send the request " + wc.getStatus());
 				// LOG the failure
 			}
-			NettyMessage.NettyMessageDecoder decoder = new RdmaMessage.NettyMessageDecoder(false);
-			NettyMessage msg = (NettyMessage) decoder.decode(null, Unpooled.wrappedBuffer(this.receiveBuffer));
-			clientHandler.decodeMsg(msg, false, this);
+//			NettyMessageDecoder decoder = new RdmaMessage.NettyMessageDecoder(false);
+//			NettyMessage msg = (NettyMessage) decoder.decode(null, Unpooled.wrappedBuffer(this.receiveBuffer));
+//			clientHandler.decodeMsg(msg, false, this);
 		} catch (Throwable e) {
 			e.printStackTrace();
 		}
