@@ -50,8 +50,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.SocketAddress;
 
-import static org.apache.flink.runtime.io.network.rdma.RdmaMessage.PartitionRequest;
-import static org.apache.flink.runtime.io.network.rdma.RdmaMessage.TaskEventRequest;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelFuture;
@@ -125,10 +123,22 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 
 //		clientHandler.addInputChannel(inputChannel);
 
-		final PartitionRequest request = new PartitionRequest(
-			partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
-
-		clientEndpoint.write(request);
+		boolean partitionReadFinished = false;
+		do {
+			final NettyMessage.PartitionRequest request = new NettyMessage.PartitionRequest(
+				partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
+			NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(request);
+			Class<?> msgClazz = bufferResponseorEvent.getClass();
+			if (msgClazz == NettyMessage.BufferResponse.class) {
+				NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) bufferResponseorEvent;
+				partitionReadFinished = bufferOrEvent.moreAvailable;
+			}
+			try {
+				clientHandler.decodeMsg(bufferResponseorEvent, false, clientEndpoint);
+			} catch (Throwable t) {
+				LOG.error("decode failure ", t);
+			}
+		}while (!partitionReadFinished);
 
 		return null;
 	}
@@ -145,7 +155,14 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 		throws IOException {
 		checkNotClosed();
 
-		clientEndpoint.write(new TaskEventRequest(event, partitionId, inputChannel.getInputChannelId()));
+		NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(new NettyMessage.TaskEventRequest(event,
+			partitionId, inputChannel.getInputChannelId()));
+
+		try {
+			clientHandler.decodeMsg(bufferResponseorEvent, false, clientEndpoint);
+		} catch (Throwable t) {
+			LOG.error("decode failure ", t);
+		}
 	}
 
 	public void notifyCreditAvailable(RemoteInputChannel inputChannel) {
@@ -157,7 +174,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 			// Close the TCP connection. Send a close request msg to ensure
 			// that outstanding backwards task events are not discarded.
 			//			tcpChannel.writeAndFlush(new NettyMessage.CloseRequest());
-			clientEndpoint.write(new RdmaMessage.CloseRequest());
+			clientEndpoint.writeAndRead(new NettyMessage.CloseRequest());
 
 			// Make sure to remove the client from the factory
 			clientFactory.destroyPartitionRequestClient(connectionId, this);

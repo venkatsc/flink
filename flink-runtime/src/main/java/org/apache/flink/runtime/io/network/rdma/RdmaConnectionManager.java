@@ -33,15 +33,14 @@ public class RdmaConnectionManager implements ConnectionManager {
 
 	private final RdmaClient client;
 
-	private PartitionRequestServerHandler serverHandler;
-
-	private final NettyBufferPool bufferPool = new NettyBufferPool(8); // TODO (venkat): we might want to allocate pool of buffers per
+	private final NettyBufferPool bufferPool = new NettyBufferPool(8); // TODO (venkat): we might want to allocate
+	// pool of buffers per
 	// connection
 	private final PartitionRequestClientFactory partitionRequestClientFactory;
 
 	public RdmaConnectionManager(RdmaConfig rdmaConfig) {
 
-		this.server = new RdmaServer(rdmaConfig, serverHandler);
+		this.server = new RdmaServer(rdmaConfig,bufferPool);
 		this.client = new RdmaClient(rdmaConfig, new PartitionRequestClientHandler(), bufferPool);
 //		this.bufferPool = new NettyBufferPool(rdmaConfig.getNumberOfArenas());
 
@@ -51,13 +50,13 @@ public class RdmaConnectionManager implements ConnectionManager {
 	@Override
 	public void start(ResultPartitionProvider partitionProvider, TaskEventDispatcher taskEventDispatcher) throws
 		IOException {
-		PartitionRequestQueue queueOfPartitionQueues = new PartitionRequestQueue(server.getClientEndpoint());
-		this.serverHandler = new PartitionRequestServerHandler(
-			partitionProvider, taskEventDispatcher, queueOfPartitionQueues, false);
+		server.setPartitionProvider(partitionProvider);
+		server.setTaskEventDispatcher(taskEventDispatcher);
 	}
 
 	@Override
-	public PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId) throws IOException, InterruptedException {
+	public PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId) throws IOException,
+		InterruptedException {
 		try {
 			return partitionRequestClientFactory.createPartitionRequestClient(connectionId);
 		} catch (Exception e) {

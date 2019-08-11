@@ -63,7 +63,7 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 		// CustomClientEndpoint
 		// let's create a new client endpoint
 		endpoint = endpointGroup.createEndpoint();
-		return new RdmaShuffleClientEndpoint(endpointGroup, idPriv, serverSide, 100, clientHandler);
+		return new RdmaShuffleClientEndpoint(endpointGroup, idPriv, serverSide, 100, clientHandler, bufferPool);
 	}
 
 	public void run() throws Exception {
@@ -77,31 +77,32 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 //		request.writeTo(endpoint.getSendBuffer());
 //		RdmaSendReceiveUtil.postSendReq(endpoint, ++workRequestId);
 //		while (i <= 50) {
-			IbvWC wc = endpoint.getWcEvents().take();
-			if (IbvWC.IbvWcOpcode.valueOf( wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV){
-				i++;
-				if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()){
-					System.out.println("Receive posting failed. reposting new receive request");
-					RdmaSendReceiveUtil.postReceiveReq(endpoint, ++workRequestId);
-				}else { // first receive succeeded. Read the data and repost the next message
-//					RdmaMessage.PartitionResponse response = (RdmaMessage.PartitionResponse) RdmaMessage.PartitionResponse.readFrom(endpoint.getReceiveBuffer());
+		IbvWC wc = endpoint.getWcEvents().take();
+		if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
+//				i++;
+			if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
+				System.out.println("Receive posting failed. reposting new receive request");
+				RdmaSendReceiveUtil.postReceiveReq(endpoint, ++workRequestId);
+			} else { // first receive succeeded. Read the data and repost the next message
+//					RdmaMessage.PartitionResponse response = (RdmaMessage.PartitionResponse) RdmaMessage
+// .PartitionResponse.readFrom(endpoint.getReceiveBuffer());
 //					System.out.println("Response partition id: "+ response.getPartitionId());
 //					endpoint.getReceiveBuffer().clear();
-					RdmaSendReceiveUtil.postReceiveReq(endpoint, ++workRequestId);
+				RdmaSendReceiveUtil.postReceiveReq(endpoint, ++workRequestId);
 //					RdmaMessage.PartitionRequest request1 = new RdmaMessage.PartitionRequest();
 //					request1.writeTo(endpoint.getSendBuffer());
-					RdmaSendReceiveUtil.postSendReq(endpoint, ++workRequestId);
-				}
-			}else if (IbvWC.IbvWcOpcode.valueOf( wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND){
-				if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()){
-					System.out.println("Send failed. reposting new send request request");
-					RdmaSendReceiveUtil.postSendReq(endpoint, ++workRequestId);
-				}
-				endpoint.getSendBuffer().clear();
-				// Send succeed does not require any action
-			}else{
-				System.out.println("failed to match any condition "+ wc.getOpcode());
+				RdmaSendReceiveUtil.postSendReq(endpoint, ++workRequestId);
 			}
+		} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
+			if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
+				System.out.println("Send failed. reposting new send request request");
+				RdmaSendReceiveUtil.postSendReq(endpoint, ++workRequestId);
+			}
+			endpoint.getSendBuffer().clear();
+			// Send succeed does not require any action
+		} else {
+			System.out.println("failed to match any condition " + wc.getOpcode());
+		}
 	}
 
 	public static void main(String[] args) throws Exception {
@@ -113,7 +114,7 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 			System.exit(-1);
 		}
 		RdmaConfig rdmaConfig = new RdmaConfig(InetAddress.getByName(cmdLine.getIp()), cmdLine.getPort());
-		RdmaClient client = new RdmaClient(rdmaConfig, null,null); // TODO: need to pass client partition handler
+		RdmaClient client = new RdmaClient(rdmaConfig, null, null); // TODO: need to pass client partition handler
 		client.run();
 	}
 

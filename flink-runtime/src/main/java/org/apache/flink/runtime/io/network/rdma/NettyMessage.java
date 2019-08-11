@@ -115,7 +115,7 @@ public abstract class NettyMessage {
 	 *                            outside of this method
 	 * @param contentLength       content length (or <tt>-1</tt> if unknown)
 	 * @param allocateForContent  whether to make room for the actual content in the buffer (<tt>true</tt>) or
-	 *                               whether to
+	 *                            whether to
 	 *                            only return a buffer with the header information (<tt>false</tt>)
 	 *                            <p>
 	 *                            //	 * @return a newly allocated direct buffer with header data written for {@link
@@ -172,7 +172,7 @@ public abstract class NettyMessage {
 		 * Creates a new message decoded with the required frame properties.
 		 *
 		 * @param restoreOldNettyBehaviour restore Netty 4.0.27 code in
-		 * {@link LengthFieldBasedFrameDecoder#extractFrame} to
+		 *                                 {@link LengthFieldBasedFrameDecoder#extractFrame} to
 		 *                                 copy instead of slicing the buffer
 		 */
 		NettyMessageDecoder(boolean restoreOldNettyBehaviour) {
@@ -275,16 +275,19 @@ public abstract class NettyMessage {
 
 		final boolean isBuffer;
 
+		final boolean moreAvailable;
+
 		private BufferResponse(
 			ByteBuf buffer,
 			boolean isBuffer,
 			int sequenceNumber,
 			InputChannelID receiverId,
-			int backlog) {
+			int backlog, boolean moreAvailable) {
 			this.buffer = checkNotNull(buffer);
 			this.isBuffer = isBuffer;
 			this.sequenceNumber = sequenceNumber;
 			this.receiverId = checkNotNull(receiverId);
+			this.moreAvailable = moreAvailable;
 			this.backlog = backlog;
 		}
 
@@ -292,12 +295,13 @@ public abstract class NettyMessage {
 			Buffer buffer,
 			int sequenceNumber,
 			InputChannelID receiverId,
-			int backlog) {
+			int backlog, boolean moreAvailable) {
 			this.buffer = checkNotNull(buffer).asByteBuf();
 			this.isBuffer = buffer.isBuffer();
 			this.sequenceNumber = sequenceNumber;
 			this.receiverId = checkNotNull(receiverId);
 			this.backlog = backlog;
+			this.moreAvailable = moreAvailable;
 		}
 
 		boolean isBuffer() {
@@ -335,6 +339,7 @@ public abstract class NettyMessage {
 				headerBuf.writeInt(sequenceNumber);
 				headerBuf.writeInt(backlog);
 				headerBuf.writeBoolean(isBuffer);
+				headerBuf.writeBoolean(moreAvailable);
 				headerBuf.writeInt(buffer.readableBytes());
 
 				CompositeByteBuf composityBuf = allocator.compositeDirectBuffer();
@@ -359,10 +364,11 @@ public abstract class NettyMessage {
 			int sequenceNumber = buffer.readInt();
 			int backlog = buffer.readInt();
 			boolean isBuffer = buffer.readBoolean();
+			boolean moreAvailable = buffer.readBoolean();
 			int size = buffer.readInt();
 
 			ByteBuf retainedSlice = buffer.readSlice(size).retain();
-			return new BufferResponse(retainedSlice, isBuffer, sequenceNumber, receiverId, backlog);
+			return new BufferResponse(retainedSlice, isBuffer, sequenceNumber, receiverId, backlog, moreAvailable);
 		}
 	}
 

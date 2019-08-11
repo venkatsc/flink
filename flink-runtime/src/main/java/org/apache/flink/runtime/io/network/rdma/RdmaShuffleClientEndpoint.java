@@ -33,6 +33,8 @@ import java.util.concurrent.ArrayBlockingQueue;
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 import org.apache.flink.shaded.netty4.io.netty.buffer.Unpooled;
 
+import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
+
 public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaShuffleClientEndpoint.class);
 
@@ -49,13 +51,16 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 
 	private ArrayBlockingQueue<IbvWC> wcEvents = new ArrayBlockingQueue<>(1000);
 	private static int workRequestId;
+	private NettyBufferPool bufferPool;
 
 	public RdmaShuffleClientEndpoint(RdmaActiveEndpointGroup<? extends RdmaActiveEndpoint> group, RdmaCmId idPriv,
-									 boolean serverSide, int bufferSize, PartitionRequestClientHandler clientHandler)
+									 boolean serverSide, int bufferSize, PartitionRequestClientHandler clientHandler,
+									 NettyBufferPool bufferPool)
 		throws IOException {
 		super(group, idPriv, serverSide);
 		this.bufferSize = bufferSize; // Todo: validate buffer size
 		this.clientHandler = clientHandler;
+		this.bufferPool = bufferPool;
 	}
 
 	@Override
@@ -116,44 +121,5 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
-	}
-
-	public RdmaMessage writeAndRead(RdmaMessage msg){
-		RdmaMessage response= null;
-		try {
-			msg.writeTo(this.getSendBuffer());
-			RdmaSendReceiveUtil.postSendReq(this, ++workRequestId);
-			for (int i=0;i<2;i++) {
-				IbvWC wc = this.getWcEvents().take();
-				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
-					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-						System.out.println("Receive posting failed. reposting new receive request");
-						RdmaSendReceiveUtil.postReceiveReq(this, ++workRequestId);
-					} else { // first receive succeeded. Read the data and repost the next message
-						byte ID =this.getReceiveBuffer().get();
-						switch(ID){
-						    case RdmaMessage.BufferResponse.ID:
-								response = RdmaMessage.BufferResponse.readFrom(this.getReceiveBuffer());
-								break;
-							default: LOG.error(" Un-identified request type "+ID);
-						}
-						this.getReceiveBuffer().clear();
-						RdmaSendReceiveUtil.postReceiveReq(this, ++workRequestId);
-					}
-				} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
-					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-						System.out.println("Send failed. reposting new send request request");
-						RdmaSendReceiveUtil.postSendReq(this, ++workRequestId);
-					}
-					this.getSendBuffer().clear();
-					// Send succeed does not require any action
-				} else {
-					System.out.println("failed to match any condition " + wc.getOpcode());
-				}
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		return response;
 	}
 }

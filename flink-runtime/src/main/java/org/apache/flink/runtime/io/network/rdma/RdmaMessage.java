@@ -68,6 +68,7 @@ public abstract class RdmaMessage {
 	abstract void writeTo(ByteBuffer buffer) throws Exception;
 
 	abstract int getMessageLength();
+
 	abstract byte getID();
 
 	// ------------------------------------------------------------------------
@@ -88,12 +89,12 @@ public abstract class RdmaMessage {
 		return buffer;
 	}
 
-	private static byte boolToByte(boolean bool){
-		return bool? (byte)1: (byte) 0;
+	private static byte boolToByte(boolean bool) {
+		return bool ? (byte) 1 : (byte) 0;
 	}
 
-	private static boolean byteToBool(byte val){
-		return (int)val!=0;
+	private static boolean byteToBool(byte val) {
+		return (int) val != 0;
 	}
 	// ------------------------------------------------------------------------
 	// Server responses
@@ -157,7 +158,7 @@ public abstract class RdmaMessage {
 		// --------------------------------------------------------------------
 		@Override
 		void writeTo(ByteBuffer buffer) throws Exception {
-			RdmaMessage.writeHeaderInfo(buffer,this);
+			RdmaMessage.writeHeaderInfo(buffer, this);
 			receiverId.writeTo(buffer);
 			buffer.putInt(sequenceNumber);
 			buffer.putInt(backlog);
@@ -168,7 +169,7 @@ public abstract class RdmaMessage {
 
 		@Override
 		int getMessageLength() {
-			return MESSAGE_LENGTH+this.buffer.readableBytes();
+			return MESSAGE_LENGTH + this.buffer.readableBytes();
 		}
 
 		@Override
@@ -183,9 +184,10 @@ public abstract class RdmaMessage {
 			boolean isBuffer = byteToBool(buffer.get());
 			int size = buffer.getInt();
 
-			byte[] buffer1= new byte[size];
-			buffer.get(buffer1,31,size+31);
-			// we already read 1 byte ID + 16 InputChannelID + 4 sequence number+ 4 backlog + 1 isBuffer+ 4 size . i.e 30
+			byte[] buffer1 = new byte[size];
+			buffer.get(buffer1, 31, size + 31);
+			// we already read 1 byte ID + 16 InputChannelID + 4 sequence number+ 4 backlog + 1 isBuffer+ 4 size . i
+			// .e 30
 			ByteBuf retainedSlice = Unpooled.copiedBuffer(buffer1);
 			return new BufferResponse(retainedSlice, isBuffer, sequenceNumber, receiverId, backlog);
 		}
@@ -219,7 +221,8 @@ public abstract class RdmaMessage {
 
 		@Override
 		void writeTo(ByteBuffer buffer) throws Exception {
-			try (ByteArrayOutputStream baos= new ByteArrayOutputStream();ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+			try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); ObjectOutputStream oos = new
+				ObjectOutputStream(baos)) {
 				oos.writeObject(cause);
 				buffer.put(baos.toByteArray());
 				if (receiverId != null) {
@@ -315,7 +318,7 @@ public abstract class RdmaMessage {
 
 		@Override
 		void writeTo(ByteBuffer buffer) throws Exception {
-			RdmaMessage.writeHeaderInfo(buffer,this);
+			RdmaMessage.writeHeaderInfo(buffer, this);
 			partitionId.getPartitionId().writeTo(buffer);
 			partitionId.getProducerId().writeTo(buffer);
 			buffer.putInt(queueIndex);
@@ -338,7 +341,7 @@ public abstract class RdmaMessage {
 
 		public static final byte ID = 3;
 
-		private static final int MESSAGE_LENGTH = 1+4 + 16 + 16 + 16;
+		private static final int MESSAGE_LENGTH = 1 + 4 + 16 + 16 + 16;
 
 		final ByteBuffer serializedEvent;
 		final TaskEvent event;
@@ -347,16 +350,17 @@ public abstract class RdmaMessage {
 
 		final ResultPartitionID partitionId;
 
-		TaskEventRequest(TaskEvent event, ResultPartitionID partitionId, InputChannelID receiverId) throws IOException {
+		TaskEventRequest(TaskEvent event, ResultPartitionID partitionId, InputChannelID receiverId) throws
+			IOException {
 			this.serializedEvent = EventSerializer.toSerializedEvent(checkNotNull(event));
-			this.event=event;
+			this.event = event;
 			this.receiverId = checkNotNull(receiverId);
 			this.partitionId = checkNotNull(partitionId);
 		}
 
 		@Override
 		void writeTo(ByteBuffer buffer) throws Exception {
-			RdmaMessage.writeHeaderInfo(buffer,this);
+			RdmaMessage.writeHeaderInfo(buffer, this);
 
 //			result = allocateBuffer(allocator, ID, 4 + serializedEvent.remaining() + 16 + 16 + 16);
 
@@ -383,9 +387,9 @@ public abstract class RdmaMessage {
 			// directly deserialize fromNetty's buffer
 			int length = buffer.getInt();
 			byte[] buffer1 = new byte[length];
-			buffer.get(buffer1,buffer.position(), length);
+			buffer.get(buffer1, buffer.position(), length);
 			ByteBuffer serializedEvent = ByteBuffer.wrap(buffer1);
-				// assume this event's content is read from the ByteBuf (positions are not shared!)
+			// assume this event's content is read from the ByteBuf (positions are not shared!)
 //			buffer.readerIndex(buffer.readerIndex() + length);
 
 			TaskEvent event =
@@ -419,7 +423,7 @@ public abstract class RdmaMessage {
 
 		@Override
 		void writeTo(ByteBuffer buffer) throws Exception {
-			RdmaMessage.writeHeaderInfo(buffer,this);
+			RdmaMessage.writeHeaderInfo(buffer, this);
 			receiverId.writeTo(buffer);
 		}
 
@@ -449,7 +453,7 @@ public abstract class RdmaMessage {
 
 		@Override
 		void writeTo(ByteBuffer buffer) throws Exception {
-			RdmaMessage.writeHeaderInfo(buffer,this);
+			RdmaMessage.writeHeaderInfo(buffer, this);
 		}
 
 		@Override
@@ -462,7 +466,8 @@ public abstract class RdmaMessage {
 			return ID;
 		}
 	}
-//
+
+	//
 //	/**
 //	 * Incremental credit announcement from the client to the server.
 //	 */
@@ -499,23 +504,23 @@ public abstract class RdmaMessage {
 			return String.format("AddCredit(%s : %d)", receiverId, credit);
 		}
 
-	@Override
-	void writeTo(ByteBuffer buffer) throws Exception {
-		RdmaMessage.writeHeaderInfo(buffer,this);
-		partitionId.getPartitionId().writeTo(buffer);
-		partitionId.getProducerId().writeTo(buffer);
-		buffer.putInt(credit);
-		receiverId.writeTo(buffer);
-	}
+		@Override
+		void writeTo(ByteBuffer buffer) throws Exception {
+			RdmaMessage.writeHeaderInfo(buffer, this);
+			partitionId.getPartitionId().writeTo(buffer);
+			partitionId.getProducerId().writeTo(buffer);
+			buffer.putInt(credit);
+			receiverId.writeTo(buffer);
+		}
 
-	@Override
-	int getMessageLength() {
-		return 0;
-	}
+		@Override
+		int getMessageLength() {
+			return 0;
+		}
 
-	@Override
-	byte getID() {
-		return ID;
-	}
+		@Override
+		byte getID() {
+			return ID;
+		}
 	}
 }

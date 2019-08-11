@@ -30,8 +30,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ArrayBlockingQueue;
 
-import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
-import org.apache.flink.shaded.netty4.io.netty.buffer.Unpooled;
 
 public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaShuffleServerEndpoint.class);
@@ -49,16 +47,13 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 	private ByteBuffer receiveBuffer; // Todo: add buffer manager with multiple buffers
 	private IbvMr registeredReceiveMemory;
 
-	private PartitionRequestServerHandler requestServerHandler;
 
 	private ArrayBlockingQueue<IbvWC> wcEvents = new ArrayBlockingQueue<>(1000);
 
 	public RdmaShuffleServerEndpoint(RdmaActiveEndpointGroup<? extends RdmaActiveEndpoint> group, RdmaCmId idPriv,
-									 boolean serverSide, int bufferSize, PartitionRequestServerHandler
-										 requestServerHandler) throws IOException {
+									 boolean serverSide, int bufferSize) throws IOException {
 		super(group, idPriv, serverSide);
 		this.bufferSize = bufferSize; // Todo: validate buffer size
-		this.requestServerHandler = requestServerHandler;
 	}
 
 	@Override
@@ -121,43 +116,15 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 		return availableFreeReceiveBuffersNotificationRegisteredMemory;
 	}
 
-//	// TODO (venkat):imp : implement below methods
-//	public void write(RdmaMessage msg) {
-//		// TODO (venkat):imp : pass buffer allocator
-//		ByteBuf buf = null;
-//		try {
-//			msg.writeTo(null);
-//			sendBuffer.put(buf.nioBuffer());
-//			RdmaSendReceiveUtil.postSendReq(this, ++workRequestId);
-//			IbvWC wcSend = this.getWcEvents().take();
-//			if (wcSend.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-//				LOG.error("failed to send the request " + wcSend.getStatus());
-//				// LOG the failure
-//			}
-//		} catch (Exception e) {
-//			e.printStackTrace();
-//		}
-//	}
+	//
+//	public NettyMessage writeAndRead(NettyMessage message) throws Exception {
+//		NettyMessage response =null;
+//		for (int i=0;i<2;i++) {
 //
-//	public void read() {
-//		try {
-//			RdmaSendReceiveUtil.postReceiveReq(this, ++workRequestId);
-//			IbvWC wc = this.getWcEvents().take();
-//			if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-//				LOG.error("failed to send the request " + wc.getStatus());
-//				// LOG the failure
-//			}
-////			NettyMessage.NettyMessageDecoder decoder = new NettyMessage.NettyMessageDecoder(false);
-////			NettyMessage msg = (NettyMessage) decoder.decode(null, Unpooled.wrappedBuffer(this.getReceiveBuffer()));
-////			requestServerHandler.channelRead(this, msg);
-//		} catch (Exception e) {
-//			e.printStackTrace();
 //		}
-//		// read the data from QP and decode
-////		retur;
+//		return null;
 //	}
-
-	public void terminate() {
+	public void stop() {
 		try {
 			this.close();
 		} catch (IOException e) {

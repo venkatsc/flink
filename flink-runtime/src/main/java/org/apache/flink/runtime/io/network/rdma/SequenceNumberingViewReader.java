@@ -42,17 +42,15 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 
 	private final InputChannelID receiverId;
 
-	private final PartitionRequestQueue requestQueue;
-
 	private volatile ResultSubpartitionView subpartitionView;
 
 	private int sequenceNumber = -1;
 
 	private boolean isRegisteredAvailable;
 
-	SequenceNumberingViewReader(InputChannelID receiverId, PartitionRequestQueue requestQueue) {
+	SequenceNumberingViewReader(InputChannelID receiverId) {
 		this.receiverId = receiverId;
-		this.requestQueue = requestQueue;
+//		this.requestQueue = requestQueue;
 	}
 
 	@Override
@@ -139,7 +137,7 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 
 	@Override
 	public void notifyDataAvailable() {
-		requestQueue.notifyReaderNonEmpty(this);
+//		requestQueue.notifyReaderNonEmpty(this);
 	}
 
 	@Override
