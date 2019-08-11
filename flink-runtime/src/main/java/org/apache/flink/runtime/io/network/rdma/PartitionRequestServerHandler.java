@@ -18,17 +18,12 @@
 
 package org.apache.flink.runtime.io.network.rdma;
 
-import static org.apache.flink.runtime.io.network.rdma.NettyMessage.PartitionRequest;
-import static org.apache.flink.runtime.io.network.rdma.NettyMessage.TaskEventRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.flink.runtime.io.network.NetworkSequenceViewReader;
 import org.apache.flink.runtime.io.network.TaskEventDispatcher;
 //import org.apache.flink.runtime.io.network.netty.CreditBasedSequenceNumberingViewReader;
-import org.apache.flink.runtime.io.network.rdma.NettyMessage.AddCredit;
-import org.apache.flink.runtime.io.network.rdma.NettyMessage.CancelPartitionRequest;
-import org.apache.flink.runtime.io.network.rdma.NettyMessage.CloseRequest;
 import org.apache.flink.runtime.io.network.partition.PartitionNotFoundException;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
 import org.apache.flink.runtime.io.network.partition.consumer.InputChannelID;
@@ -36,6 +31,7 @@ import org.apache.flink.runtime.io.network.partition.consumer.InputChannelID;
 /**
  * Channel handler to initiate data transfers and dispatch backwards flowing task events.
  */
+
 class PartitionRequestServerHandler {
 
 	private static final Logger LOG = LoggerFactory.getLogger(PartitionRequestServerHandler.class);
@@ -60,15 +56,15 @@ class PartitionRequestServerHandler {
 		this.creditBasedEnabled = creditBasedEnabled;
 	}
 
-	protected void channelRead(RdmaShuffleServerEndpoint endpoint, NettyMessage msg) throws Exception {
+	protected void channelRead(RdmaShuffleServerEndpoint endpoint, RdmaMessage msg) throws Exception {
 		try {
 			Class<?> msgClazz = msg.getClass();
 
 			// ----------------------------------------------------------------
 			// Intermediate result partition requests
 			// ----------------------------------------------------------------
-			if (msgClazz == PartitionRequest.class) {
-				PartitionRequest request = (PartitionRequest) msg;
+			if (msgClazz == RdmaMessage.PartitionRequest.class) {
+				RdmaMessage.PartitionRequest request = (RdmaMessage.PartitionRequest) msg;
 
 				LOG.debug("Read channel on {}: {}.", endpoint.getSrcAddr(), request);
 
@@ -98,21 +94,21 @@ class PartitionRequestServerHandler {
 			// ----------------------------------------------------------------
 			// Task events
 			// ----------------------------------------------------------------
-			else if (msgClazz == TaskEventRequest.class) {
-				TaskEventRequest request = (TaskEventRequest) msg;
+			else if (msgClazz == RdmaMessage.TaskEventRequest.class) {
+				RdmaMessage.TaskEventRequest request = (RdmaMessage.TaskEventRequest) msg;
 
 				if (!taskEventDispatcher.publish(request.partitionId, request.event)) {
 					respondWithError(endpoint, new IllegalArgumentException("Task event receiver not found."), request
 						.receiverId);
 				}
-			} else if (msgClazz == CancelPartitionRequest.class) {
-				CancelPartitionRequest request = (CancelPartitionRequest) msg;
+			} else if (msgClazz == RdmaMessage.CancelPartitionRequest.class) {
+				RdmaMessage.CancelPartitionRequest request = (RdmaMessage.CancelPartitionRequest) msg;
 
 				outboundQueue.cancel(request.receiverId);
-			} else if (msgClazz == CloseRequest.class) {
+			} else if (msgClazz == RdmaMessage.CloseRequest.class) {
 				outboundQueue.close();
-			} else if (msgClazz == AddCredit.class) {
-				AddCredit request = (AddCredit) msg;
+			} else if (msgClazz == RdmaMessage.AddCredit.class) {
+				RdmaMessage.AddCredit request = (RdmaMessage.AddCredit) msg;
 
 				outboundQueue.addCredit(request.receiverId, request.credit);
 			} else {
@@ -124,12 +120,12 @@ class PartitionRequestServerHandler {
 	}
 
 	private void respondWithError(RdmaShuffleServerEndpoint endpoint, Throwable error) {
-		endpoint.write(new NettyMessage.ErrorResponse(error));
+		endpoint.write(new RdmaMessage.ErrorResponse(error));
 	}
 
 	private void respondWithError(RdmaShuffleServerEndpoint endpoint, Throwable error, InputChannelID sourceId) {
 		LOG.debug("Responding with error: {}.", error.getClass());
 
-		endpoint.write(new NettyMessage.ErrorResponse(error, sourceId));
+		endpoint.write(new RdmaMessage.ErrorResponse(error, sourceId));
 	}
 }

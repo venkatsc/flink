@@ -43,9 +43,6 @@ import org.apache.flink.runtime.io.network.netty.exception.LocalTransportExcepti
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel;
 import org.apache.flink.runtime.util.AtomicDisposableReferenceCounter;
-//import org.apache.flink.shaded.netty4.io.netty.channel.Channel;
-//import org.apache.flink.shaded.netty4.io.netty.channel.ChannelFuture;
-//import org.apache.flink.shaded.netty4.io.netty.channel.ChannelFutureListener;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,6 +62,7 @@ import org.apache.flink.shaded.netty4.io.netty.channel.ChannelFuture;
  * <p>This client is shared by all remote input channels, which request a partition
  * from the same {@link ConnectionID}.
  */
+
 public class PartitionRequestClient implements PartitionRequestClientIf {
 
 	private static final Logger LOG = LoggerFactory.getLogger(PartitionRequestClient.class);
@@ -129,6 +127,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 
 		final PartitionRequest request = new PartitionRequest(
 			partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
+
 		clientEndpoint.write(request);
 
 		return null;

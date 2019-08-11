@@ -121,41 +121,41 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 		return availableFreeReceiveBuffersNotificationRegisteredMemory;
 	}
 
-	// TODO (venkat):imp : implement below methods
-	public void write(RdmaMessage msg) {
-		// TODO (venkat):imp : pass buffer allocator
-		ByteBuf buf = null;
-		try {
-			msg.writeTo(null);
-			sendBuffer.put(buf.nioBuffer());
-			RdmaSendReceiveUtil.postSendReq(this, ++workRequestId);
-			IbvWC wcSend = this.getWcEvents().take();
-			if (wcSend.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-				LOG.error("failed to send the request " + wcSend.getStatus());
-				// LOG the failure
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
-
-	public void read() {
-		try {
-			RdmaSendReceiveUtil.postReceiveReq(this, ++workRequestId);
-			IbvWC wc = this.getWcEvents().take();
-			if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-				LOG.error("failed to send the request " + wc.getStatus());
-				// LOG the failure
-			}
-//			NettyMessage.NettyMessageDecoder decoder = new NettyMessage.NettyMessageDecoder(false);
-//			NettyMessage msg = (NettyMessage) decoder.decode(null, Unpooled.wrappedBuffer(this.getReceiveBuffer()));
-//			requestServerHandler.channelRead(this, msg);
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		// read the data from QP and decode
-//		retur;
-	}
+//	// TODO (venkat):imp : implement below methods
+//	public void write(RdmaMessage msg) {
+//		// TODO (venkat):imp : pass buffer allocator
+//		ByteBuf buf = null;
+//		try {
+//			msg.writeTo(null);
+//			sendBuffer.put(buf.nioBuffer());
+//			RdmaSendReceiveUtil.postSendReq(this, ++workRequestId);
+//			IbvWC wcSend = this.getWcEvents().take();
+//			if (wcSend.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
+//				LOG.error("failed to send the request " + wcSend.getStatus());
+//				// LOG the failure
+//			}
+//		} catch (Exception e) {
+//			e.printStackTrace();
+//		}
+//	}
+//
+//	public void read() {
+//		try {
+//			RdmaSendReceiveUtil.postReceiveReq(this, ++workRequestId);
+//			IbvWC wc = this.getWcEvents().take();
+//			if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
+//				LOG.error("failed to send the request " + wc.getStatus());
+//				// LOG the failure
+//			}
+////			NettyMessage.NettyMessageDecoder decoder = new NettyMessage.NettyMessageDecoder(false);
+////			NettyMessage msg = (NettyMessage) decoder.decode(null, Unpooled.wrappedBuffer(this.getReceiveBuffer()));
+////			requestServerHandler.channelRead(this, msg);
+//		} catch (Exception e) {
+//			e.printStackTrace();
+//		}
+//		// read the data from QP and decode
+////		retur;
+//	}
 
 	public void terminate() {
 		try {

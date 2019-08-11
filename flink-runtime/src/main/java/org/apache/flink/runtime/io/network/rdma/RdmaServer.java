@@ -41,6 +41,8 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 	private RdmaServerEndpoint<RdmaShuffleServerEndpoint> serverEndpoint;
 	private InetSocketAddress address;
 
+	private boolean stopped=false;
+
 	public RdmaShuffleServerEndpoint getClientEndpoint() {
 		return clientEndpoint;
 	}
@@ -61,13 +63,13 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 		return new RdmaShuffleServerEndpoint(endpointGroup, idPriv, serverSide, 100, serverHandler);
 	}
 
-	public RdmaServer(RdmaConfig rdmaConfig, PartitionRequestServerHandler serverHandler, NettyBufferPool bufferPool) {
+	public RdmaServer(RdmaConfig rdmaConfig, PartitionRequestServerHandler serverHandler) {
 		this.rdmaConfig = rdmaConfig;
 		this.serverHandler = serverHandler;
-		this.bufferPool = bufferPool;
+//		this.bufferPool = bufferPool;
 	}
 
-	public void run() throws Exception {
+	public void start() throws Exception {
 		// create a EndpointGroup. The RdmaActiveEndpointGroup contains CQ processing and delivers CQ event to the
 		// endpoint.dispatchCqEvent() method.
 		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleServerEndpoint>(1000, true, 128, 4, 128);
@@ -84,43 +86,20 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 			e.printStackTrace();
 		}
 		System.out.println("SimpleServer::servers bound to address " + address.toString());
+		// we can accept client connections untill this server is stopped
+		while (!stopped){
+			clientEndpoint = serverEndpoint.accept();
 
-		// we can accept new connections
-		clientEndpoint = serverEndpoint.accept();
-
-		RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
-		// we have previously passed our own endpoint factory to the group, therefore new endpoints will be of type
-		// CustomServerEndpoint
-		// System.out.println("SimpleServer::client connection accepted");
-
-		int i = 0;
-		String message;
-		// close everything
-		System.out.println("group closed");
-	}
-
-	public static void main(String[] args) throws Exception {
-		CmdLineCommon cmdLine = new CmdLineCommon("RdmaServer");
-		try {
-			cmdLine.parse(args);
-		} catch (ParseException e) {
-			cmdLine.printHelp();
-			System.exit(-1);
+			// TODO: // create requested handler
 		}
-		RdmaConfig rdmaConfig = new RdmaConfig(InetAddress.getByName(cmdLine.getIp()), cmdLine.getPort());
-		RdmaServer server = new RdmaServer(rdmaConfig, null,new NettyBufferPool(8)); //TODO (venkat): it should not be null
-		server.run();
 	}
 
-	public void shutdown() {
+	public void stop(){
+		stopped = true;
 		try {
-			// clientEndpoint.close();
-			// System.out.println("client endpoint closed");
 			serverEndpoint.close();
-			System.out.println("server endpoint closed");
-			endpointGroup.close();
-		} catch (Exception e) {
-			LOG.error(e.getMessage());
+		}catch (Exception e){
+			LOG.error("Failed to stop server ",e);
 		}
 	}
 }

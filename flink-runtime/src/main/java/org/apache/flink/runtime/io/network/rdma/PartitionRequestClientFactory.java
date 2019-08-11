@@ -86,8 +86,7 @@ class PartitionRequestClientFactory {
 		return client;
 	}
 
-	public void closeOpenChannelConnections(ConnectionID connectionId) {
-	}
+	public void closeOpenChannelConnections(ConnectionID connectionId) {}
 
 	int getNumberOfActiveClients() {
 		return clients.size();

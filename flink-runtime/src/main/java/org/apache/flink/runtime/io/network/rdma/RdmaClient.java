@@ -32,6 +32,8 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
+import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
+
 import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
 
 public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint> {
@@ -51,7 +53,7 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 	public RdmaClient(RdmaConfig rdmaConfig, PartitionRequestClientHandler clientHandler, NettyBufferPool bufferPool) {
 		this.rdmaConfig = rdmaConfig;
 		this.clientHandler = clientHandler;
-		this.bufferPool=bufferPool;
+		this.bufferPool = bufferPool;
 	}
 
 	public RdmaShuffleClientEndpoint createEndpoint(RdmaCmId idPriv, boolean serverSide) throws IOException {
@@ -65,34 +67,16 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 	}
 
 	public void run() throws Exception {
-		// create a EndpointGroup. The RdmaActiveEndpointGroup contains CQ processing and delivers CQ event to the
-		// endpoint.dispatchCqEvent() method.
-		System.out.println("Starting client");
-		// connect to the server
-        // InetAddress ipAddress = InetAddress.getByName(host);
-		//create a EndpointGroup. The RdmaActiveEndpointGroup contains CQ processing and delivers CQ event to the
-		// endpoint.dispatchCqEvent() method.
-		System.out.println("Starting client");
-		//connect to the server
-//		InetAddress ipAddress = InetAddress.getByName(host);
-		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleClientEndpoint>(1000, true, 128, 4, 128);
-		endpointGroup.init(this);
-		//we have passed our own endpoint factory to the group, therefore new endpoints will be of type
-		// CustomClientEndpoint
-		//let's create a new client endpoint
 		endpoint = endpointGroup.createEndpoint();
 		InetSocketAddress address = new InetSocketAddress(rdmaConfig.getServerAddress(), rdmaConfig.getServerPort());
 		endpoint.connect(address, 1000);
-		// Post receive request
-//		RdmaSendReceiveUtil.postReceiveReq(endpoint,++workRequestId);
-		// TODO: give time for server to post Receive Work request RWR
 		System.out.println("SimpleClient::client channel set up ");
-		int i = 0;
+		// start and post a receive
 		RdmaSendReceiveUtil.postReceiveReq(endpoint, ++workRequestId);
 //		RdmaMessage.PartitionRequest request = new RdmaMessage.PartitionRequest();
 //		request.writeTo(endpoint.getSendBuffer());
-		RdmaSendReceiveUtil.postSendReq(endpoint, ++workRequestId);
-		while (i <= 50) {
+//		RdmaSendReceiveUtil.postSendReq(endpoint, ++workRequestId);
+//		while (i <= 50) {
 			IbvWC wc = endpoint.getWcEvents().take();
 			if (IbvWC.IbvWcOpcode.valueOf( wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV){
 				i++;
@@ -118,9 +102,6 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 			}else{
 				System.out.println("failed to match any condition "+ wc.getOpcode());
 			}
-		}
-
-		// System.exit(0);
 	}
 
 	public static void main(String[] args) throws Exception {
@@ -136,10 +117,8 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 		client.run();
 	}
 
-	public void shutdown() {
+	public void stop() {
 		try {
-			endpoint.close();
-			System.out.println("client endpoint closed");
 			System.out.println("server endpoint closed");
 			endpointGroup.close();
 		} catch (Exception e) {

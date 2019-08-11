@@ -71,18 +71,18 @@ class PartitionRequestQueue {
 		this.endpoint = endpoint ;
 	}
 
-	void notifyReaderNonEmpty(final NetworkSequenceViewReader reader) {
-		// The notification might come from the same thread. For the initial writes this
-		// might happen before the reader has set its reference to the view, because
-		// creating the queue and the initial notification happen in the same method call.
-		// This can be resolved by separating the creation of the view and allowing
-		// notifications.
-
-		// TODO This could potentially have a bad performance impact as in the
-		// worst case (network consumes faster than the producer) each buffer
-		// will trigger a separate event loop task being scheduled.
-		//		ctx.executor().execute(() -> ctx.pipeline().fireUserEventTriggered(reader));
-	}
+//	void notifyReaderNonEmpty(final NetworkSequenceViewReader reader) {
+//		// The notification might come from the same thread. For the initial writes this
+//		// might happen before the reader has set its reference to the view, because
+//		// creating the queue and the initial notification happen in the same method call.
+//		// This can be resolved by separating the creation of the view and allowing
+//		// notifications.
+//
+//		// TODO This could potentially have a bad performance impact as in the
+//		// worst case (network consumes faster than the producer) each buffer
+//		// will trigger a separate event loop task being scheduled.
+//		//		ctx.executor().execute(() -> ctx.pipeline().fireUserEventTriggered(reader));
+//	}
 
 	/**
 	 * Try to enqueue the reader once receiving credit notification from the consumer or receiving
@@ -124,7 +124,7 @@ class PartitionRequestQueue {
 
 	public void cancel(InputChannelID receiverId) {
 		// TODO (venkat):imp : implement below methods
-//		ctx.pipeline().fireUserEventTriggered(receiverId);
+		// ctx.pipeline().fireUserEventTriggered(receiverId);
 	}
 
 	public void close() throws IOException, InterruptedException {
@@ -242,7 +242,7 @@ class PartitionRequestQueue {
 
 		fatalError = true;
 		releaseAllResources();
-// TODO (venkat):imp : do we need this check here?
+		// TODO (venkat):imp : do we need this check here?
 //		if (endpoint.isActive()) {
 		endpoint.write(new RdmaMessage.ErrorResponse(cause));
 //		}

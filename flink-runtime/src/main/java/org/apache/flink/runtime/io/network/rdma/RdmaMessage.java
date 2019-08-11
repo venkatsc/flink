@@ -101,7 +101,7 @@ public abstract class RdmaMessage {
 
 	static class BufferResponse extends RdmaMessage {
 
-		private static final byte ID = 0;
+		public static final byte ID = 0;
 		// receiver receiverId (16), sequence number (4), backlog (4), isBuffer (1), buffer size (4)
 		private final static int MESSAGE_LENGTH = /*ID*/ 1 + 16 + 4 + 4 + 1 + 4; // without content length
 
@@ -195,7 +195,7 @@ public abstract class RdmaMessage {
 
 	static class ErrorResponse extends RdmaMessage {
 
-		private static final byte ID = 1;
+		public static final byte ID = 1;
 		private final static int MESSAGE_LENGTH = /*ID*/ 1 + 16 + 4 + 4 + 1 + 4; // without content length
 
 		final Throwable cause;
@@ -277,7 +277,7 @@ public abstract class RdmaMessage {
 
 	static class PartitionRequest extends RdmaMessage {
 
-		private static final byte ID = 2;
+		public static final byte ID = 2;
 
 		private final static int MESSAGE_LENGTH = /*ID*/ 1 + /*partitionId.getPartitionId()*/ 16 + /*partitionId
 		.getProducerId()*/16 + /*queueIndex*/ 4 + /*receiverId*/ 16 + /*credit*/4;
@@ -336,11 +336,12 @@ public abstract class RdmaMessage {
 
 	static class TaskEventRequest extends RdmaMessage {
 
-		private static final byte ID = 3;
+		public static final byte ID = 3;
 
 		private static final int MESSAGE_LENGTH = 1+4 + 16 + 16 + 16;
 
 		final ByteBuffer serializedEvent;
+		final TaskEvent event;
 
 		final InputChannelID receiverId;
 
@@ -348,6 +349,7 @@ public abstract class RdmaMessage {
 
 		TaskEventRequest(TaskEvent event, ResultPartitionID partitionId, InputChannelID receiverId) throws IOException {
 			this.serializedEvent = EventSerializer.toSerializedEvent(checkNotNull(event));
+			this.event=event;
 			this.receiverId = checkNotNull(receiverId);
 			this.partitionId = checkNotNull(partitionId);
 		}
@@ -401,59 +403,45 @@ public abstract class RdmaMessage {
 
 	}
 
-	/**
-	 * Cancels the partition request of the {@link InputChannel} identified by
-	 * {@link InputChannelID}.
-	 *
-	 * <p>There is a 1:1 mapping between the input channel and partition per physical channel.
-	 * Therefore, the {@link InputChannelID} instance is enough to identify which request to cancel.
-	 */
-//	static class CancelPartitionRequest extends NettyMessage {
-//
-//		private static final byte ID = 4;
-//
-//		final InputChannelID receiverId;
-//
-//		CancelPartitionRequest(InputChannelID receiverId) {
-//			this.receiverId = checkNotNull(receiverId);
-//		}
-//
-//		@Override
-//		ByteBuf write(ByteBufAllocator allocator) throws Exception {
-//			ByteBuf result = null;
-//
-//			try {
-//				result = allocateBuffer(allocator, ID, 16);
-//				receiverId.writeTo(result);
-//			} catch (Throwable t) {
-//				if (result != null) {
-//					result.release();
-//				}
-//
-//				throw new IOException(t);
-//			}
-//
-//			return result;
-//		}
-//
-//		static CancelPartitionRequest readFrom(ByteBuf buffer) throws Exception {
-//			return new CancelPartitionRequest(InputChannelID.fromByteBuf(buffer));
-//		}
-//	}
-//
+	static class CancelPartitionRequest extends RdmaMessage {
+
+		public static final byte ID = 4;
+
+		final InputChannelID receiverId;
+
+		CancelPartitionRequest(InputChannelID receiverId) {
+			this.receiverId = checkNotNull(receiverId);
+		}
+
+		static CancelPartitionRequest readFrom(ByteBuf buffer) throws Exception {
+			return new CancelPartitionRequest(InputChannelID.fromByteBuf(buffer));
+		}
+
+		@Override
+		void writeTo(ByteBuffer buffer) throws Exception {
+			RdmaMessage.writeHeaderInfo(buffer,this);
+			receiverId.writeTo(buffer);
+		}
+
+		@Override
+		int getMessageLength() {
+			return 0;
+		}
+
+		@Override
+		byte getID() {
+			return 0;
+		}
+	}
+
 	static class CloseRequest extends RdmaMessage {
 
-		private static final byte ID = 5;
+		public static final byte ID = 5;
 
 		private static final int MESSAGE_LENGTH = 1;
 
 		CloseRequest() {
 		}
-
-//		@Override
-//		ByteBuf write(ByteBufAllocator allocator) throws Exception {
-//			return allocateBuffer(allocator, ID, 0);
-//		}
 
 		static CloseRequest readFrom(@SuppressWarnings("unused") ByteBuffer buffer) throws Exception {
 			return new CloseRequest();
@@ -478,59 +466,56 @@ public abstract class RdmaMessage {
 //	/**
 //	 * Incremental credit announcement from the client to the server.
 //	 */
-//	static class AddCredit extends RdmaMessage {
-//
-//		private static final byte ID = 6;
-//
-//		final ResultPartitionID partitionId;
-//
-//		final int credit;
-//
-//		final InputChannelID receiverId;
-//
-//		AddCredit(ResultPartitionID partitionId, int credit, InputChannelID receiverId) {
-//			checkArgument(credit > 0, "The announced credit should be greater than 0");
-//
-//			this.partitionId = partitionId;
-//			this.credit = credit;
-//			this.receiverId = receiverId;
-//		}
-//
-//		@Override
-//		ByteBuf write(ByteBufAllocator allocator) throws IOException {
-//			ByteBuf result = null;
-//
-//			try {
-//				result = allocateBuffer(allocator, ID, 16 + 16 + 4 + 16);
-//				partitionId.getPartitionId().writeTo(result);
-//				partitionId.getProducerId().writeTo(result);
-//				result.writeInt(credit);
-//				receiverId.writeTo(result);
-//
-//				return result;
-//			} catch (Throwable t) {
-//				if (result != null) {
-//					result.release();
-//				}
-//
-//				throw new IOException(t);
-//			}
-//		}
-//
-//		static AddCredit readFrom(ByteBuf buffer) {
-//			ResultPartitionID partitionId =
-//				new ResultPartitionID(
-//					IntermediateResultPartitionID.fromByteBuf(buffer),
-//					ExecutionAttemptID.fromByteBuf(buffer));
-//			int credit = buffer.readInt();
-//			InputChannelID receiverId = InputChannelID.fromByteBuf(buffer);
-//
-//			return new AddCredit(partitionId, credit, receiverId);
-//		}
-//
-//		@Override
-//		public String toString() {
-//			return String.format("AddCredit(%s : %d)", receiverId, credit);
-//		}
-//	}
+	static class AddCredit extends RdmaMessage {
+
+		public static final byte ID = 6;
+
+		final ResultPartitionID partitionId;
+
+		final int credit;
+
+		final InputChannelID receiverId;
+
+		AddCredit(ResultPartitionID partitionId, int credit, InputChannelID receiverId) {
+			checkArgument(credit > 0, "The announced credit should be greater than 0");
+			this.partitionId = partitionId;
+			this.credit = credit;
+			this.receiverId = receiverId;
+		}
+
+		static AddCredit readFrom(ByteBuf buffer) {
+			ResultPartitionID partitionId =
+				new ResultPartitionID(
+					IntermediateResultPartitionID.fromByteBuf(buffer),
+					ExecutionAttemptID.fromByteBuf(buffer));
+			int credit = buffer.readInt();
+			InputChannelID receiverId = InputChannelID.fromByteBuf(buffer);
+
+			return new AddCredit(partitionId, credit, receiverId);
+		}
+
+		@Override
+		public String toString() {
+			return String.format("AddCredit(%s : %d)", receiverId, credit);
+		}
+
+	@Override
+	void writeTo(ByteBuffer buffer) throws Exception {
+		RdmaMessage.writeHeaderInfo(buffer,this);
+		partitionId.getPartitionId().writeTo(buffer);
+		partitionId.getProducerId().writeTo(buffer);
+		buffer.putInt(credit);
+		receiverId.writeTo(buffer);
+	}
+
+	@Override
+	int getMessageLength() {
+		return 0;
+	}
+
+	@Override
+	byte getID() {
+		return ID;
+	}
+	}
 }

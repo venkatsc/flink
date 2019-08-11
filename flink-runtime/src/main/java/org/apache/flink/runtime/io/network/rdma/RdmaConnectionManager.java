@@ -41,7 +41,7 @@ public class RdmaConnectionManager implements ConnectionManager {
 
 	public RdmaConnectionManager(RdmaConfig rdmaConfig) {
 
-		this.server = new RdmaServer(rdmaConfig, serverHandler,bufferPool);
+		this.server = new RdmaServer(rdmaConfig, serverHandler);
 		this.client = new RdmaClient(rdmaConfig, new PartitionRequestClientHandler(), bufferPool);
 //		this.bufferPool = new NettyBufferPool(rdmaConfig.getNumberOfArenas());
 
@@ -82,7 +82,7 @@ public class RdmaConnectionManager implements ConnectionManager {
 
 	@Override
 	public void shutdown() throws IOException {
-		client.shutdown();
-		server.shutdown();
+		client.stop();
+		server.stop();
 	}
 }
