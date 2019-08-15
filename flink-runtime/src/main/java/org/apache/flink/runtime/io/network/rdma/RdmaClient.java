@@ -35,11 +35,12 @@ import java.nio.ByteBuffer;
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 
 import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
+import org.apache.flink.runtime.io.network.netty.NettyConfig;
 
 public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint> {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaClient.class);
 	RdmaActiveEndpointGroup<RdmaShuffleClientEndpoint> endpointGroup;
-	private final RdmaConfig rdmaConfig;
+	private final NettyConfig rdmaConfig;
 	private int workRequestId = 1;
 	private NettyBufferPool bufferPool;
 
@@ -50,7 +51,7 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 	private RdmaShuffleClientEndpoint endpoint;
 	private PartitionRequestClientHandler clientHandler;
 
-	public RdmaClient(RdmaConfig rdmaConfig, PartitionRequestClientHandler clientHandler, NettyBufferPool bufferPool) {
+	public RdmaClient(NettyConfig rdmaConfig, PartitionRequestClientHandler clientHandler, NettyBufferPool bufferPool) {
 		this.rdmaConfig = rdmaConfig;
 		this.clientHandler = clientHandler;
 		this.bufferPool = bufferPool;
@@ -66,10 +67,16 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 		return new RdmaShuffleClientEndpoint(endpointGroup, idPriv, serverSide, 100, clientHandler, bufferPool);
 	}
 
-	public void run() throws Exception {
+	public void start() throws IOException {
 		endpoint = endpointGroup.createEndpoint();
 		InetSocketAddress address = new InetSocketAddress(rdmaConfig.getServerAddress(), rdmaConfig.getServerPort());
-		endpoint.connect(address, 1000);
+		try {
+			endpoint.connect(address, 1000);
+		}catch (Exception e){
+			LOG.error("failed to start the client ",e);
+			throw new IOException("client failed to start");
+		}
+
 		System.out.println("SimpleClient::client channel set up ");
 		// start and post a receive
 		RdmaSendReceiveUtil.postReceiveReq(endpoint, ++workRequestId);
@@ -77,46 +84,22 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 //		request.writeTo(endpoint.getSendBuffer());
 //		RdmaSendReceiveUtil.postSendReq(endpoint, ++workRequestId);
 //		while (i <= 50) {
-		IbvWC wc = endpoint.getWcEvents().take();
-		if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
-//				i++;
-			if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-				System.out.println("Receive posting failed. reposting new receive request");
-				RdmaSendReceiveUtil.postReceiveReq(endpoint, ++workRequestId);
-			} else { // first receive succeeded. Read the data and repost the next message
-//					RdmaMessage.PartitionResponse response = (RdmaMessage.PartitionResponse) RdmaMessage
-// .PartitionResponse.readFrom(endpoint.getReceiveBuffer());
-//					System.out.println("Response partition id: "+ response.getPartitionId());
-//					endpoint.getReceiveBuffer().clear();
-				RdmaSendReceiveUtil.postReceiveReq(endpoint, ++workRequestId);
-//					RdmaMessage.PartitionRequest request1 = new RdmaMessage.PartitionRequest();
-//					request1.writeTo(endpoint.getSendBuffer());
-				RdmaSendReceiveUtil.postSendReq(endpoint, ++workRequestId);
-			}
-		} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
-			if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-				System.out.println("Send failed. reposting new send request request");
-				RdmaSendReceiveUtil.postSendReq(endpoint, ++workRequestId);
-			}
-			endpoint.getSendBuffer().clear();
-			// Send succeed does not require any action
-		} else {
-			System.out.println("failed to match any condition " + wc.getOpcode());
-		}
 	}
 
-	public static void main(String[] args) throws Exception {
-		CmdLineCommon cmdLine = new CmdLineCommon("RdmaClient");
-		try {
-			cmdLine.parse(args);
-		} catch (ParseException e) {
-			cmdLine.printHelp();
-			System.exit(-1);
-		}
-		RdmaConfig rdmaConfig = new RdmaConfig(InetAddress.getByName(cmdLine.getIp()), cmdLine.getPort());
-		RdmaClient client = new RdmaClient(rdmaConfig, null, null); // TODO: need to pass client partition handler
-		client.run();
-	}
+
+
+//	public static void main(String[] args) throws Exception {
+//		CmdLineCommon cmdLine = new CmdLineCommon("RdmaClient");
+//		try {
+//			cmdLine.parse(args);
+//		} catch (ParseException e) {
+//			cmdLine.printHelp();
+//			System.exit(-1);
+//		}
+//		RdmaConfig rdmaConfig = new RdmaConfig(InetAddress.getByName(cmdLine.getIp()), cmdLine.getPort());
+//		RdmaClient client = new RdmaClient(rdmaConfig, null, null); // TODO: need to pass client partition handler
+//		client.run();
+//	}
 
 	public void stop() {
 		try {

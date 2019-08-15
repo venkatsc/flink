@@ -18,6 +18,7 @@
 
 package org.apache.flink.runtime.io.network.rdma;
 
+import com.esotericsoftware.minlog.Log;
 import com.ibm.disni.RdmaActiveEndpointGroup;
 import com.ibm.disni.RdmaEndpointFactory;
 import com.ibm.disni.RdmaServerEndpoint;
@@ -39,6 +40,7 @@ import org.apache.flink.shaded.netty4.io.netty.buffer.Unpooled;
 import org.apache.flink.runtime.io.network.NetworkSequenceViewReader;
 import org.apache.flink.runtime.io.network.TaskEventDispatcher;
 import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
+import org.apache.flink.runtime.io.network.netty.NettyConfig;
 import org.apache.flink.runtime.io.network.partition.ProducerFailedException;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
 import org.apache.flink.runtime.io.network.partition.consumer.InputChannel;
@@ -47,7 +49,7 @@ import org.apache.flink.runtime.io.network.partition.consumer.InputChannelID;
 public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint> {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaServer.class);
 	private RdmaActiveEndpointGroup<RdmaShuffleServerEndpoint> endpointGroup;
-	private final RdmaConfig rdmaConfig;
+	private final NettyConfig rdmaConfig;
 	private int workRequestId = 1;
 	private RdmaServerEndpoint<RdmaShuffleServerEndpoint> serverEndpoint;
 	private InetSocketAddress address;
@@ -76,7 +78,7 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 		return new RdmaShuffleServerEndpoint(endpointGroup, idPriv, serverSide, 100);
 	}
 
-	public RdmaServer(RdmaConfig rdmaConfig, NettyBufferPool bufferPool) {
+	public RdmaServer(NettyConfig rdmaConfig, NettyBufferPool bufferPool) {
 		this.rdmaConfig = rdmaConfig;
 		this.bufferPool = bufferPool;
 	}
@@ -89,7 +91,7 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 		this.taskEventDispatcher = taskEventDispatcher;
 	}
 
-	public void start() throws Exception {
+	public void start() throws IOException {
 		// create a EndpointGroup. The RdmaActiveEndpointGroup contains CQ processing and delivers CQ event to the
 		// endpoint.dispatchCqEvent() method.
 		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleServerEndpoint>(1000, true, 128, 4, 128);
@@ -110,66 +112,76 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 		while (!stopped) {
 			clientEndpoint = serverEndpoint.accept();
 			boolean clientClose = false;
-			while (!clientClose) {
-				IbvWC wc = clientEndpoint.getWcEvents().take();
-				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
-					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-						System.out.println("Receive posting failed. reposting new receive request");
-						RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
-					} else { // first receive succeeded. Read the data and repost the next message
-						NettyMessage clientRequest = decodeMessageFromBuffer(clientEndpoint.getReceiveBuffer());
-						Class<?> msgClazz = clientRequest.getClass();
-						if (msgClazz == NettyMessage.CloseRequest.class) {
-							clientClose = true;
-						} else if (msgClazz == NettyMessage.PartitionRequest.class) {
-							// prepare response and post it
-							NettyMessage.PartitionRequest partitionRequest = (NettyMessage.PartitionRequest)
-								clientRequest;
-							NettyMessage response = readPartition(partitionRequest);
-							clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
-							clientEndpoint.getReceiveBuffer().clear();
-							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next receive
-							RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
-						} else if (msgClazz == RdmaMessage.TaskEventRequest.class) {
-							NettyMessage.TaskEventRequest request = (NettyMessage.TaskEventRequest) clientRequest;
-							LOG.error("Unhandled request type TaskEventRequest");
-							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next receive
-							// TODO (venkat): Handle it
-							if (!taskEventDispatcher.publish(request.partitionId, request.event)) {
+			try {
+				while (!clientClose) {
+					IbvWC wc = null;
+					wc = clientEndpoint.getWcEvents().take();
+					if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
+						if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
+							System.out.println("Receive posting failed. reposting new receive request");
+							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
+						} else { // first receive succeeded. Read the data and repost the next message
+							NettyMessage clientRequest = decodeMessageFromBuffer(clientEndpoint.getReceiveBuffer());
+							Class<?> msgClazz = clientRequest.getClass();
+							if (msgClazz == NettyMessage.CloseRequest.class) {
+								clientClose = true;
+							} else if (msgClazz == NettyMessage.PartitionRequest.class) {
+								LOG.info("received partition request");
+								// prepare response and post it
+								NettyMessage.PartitionRequest partitionRequest = (NettyMessage.PartitionRequest)
+									clientRequest;
+								NettyMessage response = readPartition(partitionRequest);
+								clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
+								clientEndpoint.getReceiveBuffer().clear();
+								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next receive
+
+
+								RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+							} else if (msgClazz == RdmaMessage.TaskEventRequest.class) {
+								NettyMessage.TaskEventRequest request = (NettyMessage.TaskEventRequest) clientRequest;
+								LOG.error("Unhandled request type TaskEventRequest");
+								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
+								// receive
+								// TODO (venkat): Handle it
+								if (!taskEventDispatcher.publish(request.partitionId, request.event)) {
 //								respondWithError(ctx, new IllegalArgumentException("Task event receiver not found."), request.receiverId);
-							}
-						} else if (msgClazz == NettyMessage.CancelPartitionRequest.class) {
-							NettyMessage.CancelPartitionRequest request = (NettyMessage.CancelPartitionRequest)
-								clientRequest;
-							LOG.error("Unhandled request type CancelPartitionRequest");
-							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next receive
-							// TODO (venkat): Handle it
+								}
+							} else if (msgClazz == NettyMessage.CancelPartitionRequest.class) {
+								NettyMessage.CancelPartitionRequest request = (NettyMessage.CancelPartitionRequest)
+									clientRequest;
+								LOG.error("Unhandled request type CancelPartitionRequest");
+								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next receive
+								// TODO (venkat): Handle it
 //							outboundQueue.cancel(request.receiverId);
-						} else if (msgClazz == NettyMessage.AddCredit.class) {
-							NettyMessage.AddCredit request = (NettyMessage.AddCredit) clientRequest;
-							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next receive
-							// TODO (venkat): Handle it
-							LOG.error("Unhandled request type AddCredit");
-							// outboundQueue.addCredit(request.receiverId, request.credit);
-						} else {
-							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next receive
-							LOG.warn("Received unexpected client request: {}", clientRequest);
+							} else if (msgClazz == NettyMessage.AddCredit.class) {
+								NettyMessage.AddCredit request = (NettyMessage.AddCredit) clientRequest;
+								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next receive
+								// TODO (venkat): Handle it
+								LOG.error("Unhandled request type AddCredit");
+								// outboundQueue.addCredit(request.receiverId, request.credit);
+							} else {
+								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next receive
+								LOG.warn("Received unexpected client request: {}", clientRequest);
+							}
 						}
+					} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
+						if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
+							System.out.println("Send failed. reposting new send request request");
+							RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+						}
+						// send completed, so clear the buffer
+						clientEndpoint.getSendBuffer().clear();
+						// Send succeed does not require any action
+					} else {
+						System.out.println("failed to match any condition " + wc.getOpcode());
 					}
-				} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
-					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-						System.out.println("Send failed. reposting new send request request");
-						RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
-					}
-					// send completed, so clear the buffer
-					clientEndpoint.getSendBuffer().clear();
-					// Send succeed does not require any action
-				} else {
-					System.out.println("failed to match any condition " + wc.getOpcode());
+					// TODO: create requested handler
 				}
-				// TODO: create requested handler
+				clientEndpoint.close();
+			} catch (Exception ie) {
+				Log.error("Failed to handle request",ie);
+				throw new IOException("Error processing request. check the log");
 			}
-			clientEndpoint.close();
 		}
 	}
 
@@ -232,6 +244,10 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 				return msg;
 			}
 		}
+	}
+
+	public int getPort(){
+		return  this.rdmaConfig.getServerPort();
 	}
 
 	public void stop() {

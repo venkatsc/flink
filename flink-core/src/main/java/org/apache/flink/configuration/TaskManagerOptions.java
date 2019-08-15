@@ -307,6 +307,11 @@ public class TaskManagerOptions {
 				" increase this value or the min/max values below. Also note, that \"taskmanager.network.memory.min\"" +
 				"` and \"taskmanager.network.memory.max\" may override this fraction.");
 
+	public static final ConfigOption<Boolean> RDMA_ENABLED =
+		key("taskmanager.network.rdma")
+			.defaultValue(false)
+			.withDescription("Enable RDMA verbs API communication instead of netty");
+
 	/**
 	 * Minimum memory size for network buffers.
 	 */

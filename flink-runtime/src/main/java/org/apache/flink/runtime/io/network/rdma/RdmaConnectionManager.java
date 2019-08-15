@@ -25,6 +25,7 @@ import org.apache.flink.runtime.io.network.ConnectionManager;
 import org.apache.flink.runtime.io.network.PartitionRequestClientIf;
 import org.apache.flink.runtime.io.network.TaskEventDispatcher;
 import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
+import org.apache.flink.runtime.io.network.netty.NettyConfig;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
 
 public class RdmaConnectionManager implements ConnectionManager {
@@ -36,15 +37,14 @@ public class RdmaConnectionManager implements ConnectionManager {
 	private final NettyBufferPool bufferPool = new NettyBufferPool(8); // TODO (venkat): we might want to allocate
 	// pool of buffers per
 	// connection
-	private final PartitionRequestClientFactory partitionRequestClientFactory;
+	private PartitionRequestClientFactory partitionRequestClientFactory;
 
-	public RdmaConnectionManager(RdmaConfig rdmaConfig) {
+	public RdmaConnectionManager(NettyConfig rdmaConfig) {
 
 		this.server = new RdmaServer(rdmaConfig,bufferPool);
 		this.client = new RdmaClient(rdmaConfig, new PartitionRequestClientHandler(), bufferPool);
 //		this.bufferPool = new NettyBufferPool(rdmaConfig.getNumberOfArenas());
 
-		this.partitionRequestClientFactory = new PartitionRequestClientFactory(client);
 	}
 
 	@Override
@@ -52,6 +52,9 @@ public class RdmaConnectionManager implements ConnectionManager {
 		IOException {
 		server.setPartitionProvider(partitionProvider);
 		server.setTaskEventDispatcher(taskEventDispatcher);
+		server.start();
+		client.start();
+		this.partitionRequestClientFactory = new PartitionRequestClientFactory(client);
 	}
 
 	@Override
@@ -76,7 +79,7 @@ public class RdmaConnectionManager implements ConnectionManager {
 
 	@Override
 	public int getDataPort() {
-		return -1;
+			return server.getPort();
 	}
 
 	@Override

@@ -102,6 +102,8 @@ public class NettyConfig {
 	private final int numberOfSlots;
 
 	private final Configuration config; // optional configuration
+	
+	private final boolean rdmaEnabled;
 
 	public NettyConfig(
 			InetAddress serverAddress,
@@ -122,24 +124,30 @@ public class NettyConfig {
 		this.numberOfSlots = numberOfSlots;
 
 		this.config = checkNotNull(config);
+		
+		this.rdmaEnabled= config.getBoolean(TaskManagerOptions.RDMA_ENABLED);
 
 		LOG.info(this.toString());
 	}
 
-	InetAddress getServerAddress() {
+	public  InetAddress getServerAddress() {
 		return serverAddress;
 	}
 
-	int getServerPort() {
+	public int getServerPort() {
 		return serverPort;
 	}
 
-	int getMemorySegmentSize() {
+	public int getMemorySegmentSize() {
 		return memorySegmentSize;
 	}
 
 	public int getNumberOfSlots() {
 		return numberOfSlots;
+	}
+	
+	public boolean isRdmaEnabled(){
+		return this.rdmaEnabled;
 	}
 
 	// ------------------------------------------------------------------------

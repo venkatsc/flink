@@ -39,6 +39,7 @@ import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 import org.apache.flink.runtime.io.network.netty.NettyConfig;
 import org.apache.flink.runtime.io.network.netty.NettyConnectionManager;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionManager;
+import org.apache.flink.runtime.io.network.rdma.RdmaConnectionManager;
 import org.apache.flink.runtime.memory.MemoryManager;
 import org.apache.flink.runtime.query.KvStateClientProxy;
 import org.apache.flink.runtime.query.KvStateRegistry;
@@ -406,8 +407,12 @@ public class TaskManagerServices {
 		boolean enableCreditBased = false;
 		NettyConfig nettyConfig = networkEnvironmentConfiguration.nettyConfig();
 		if (nettyConfig != null) {
-			connectionManager = new NettyConnectionManager(nettyConfig);
-			enableCreditBased = nettyConfig.isCreditBasedEnabled();
+			if (!nettyConfig.isRdmaEnabled()) {
+				connectionManager = new NettyConnectionManager(nettyConfig);
+				enableCreditBased = nettyConfig.isCreditBasedEnabled();
+			}else{
+				connectionManager = new RdmaConnectionManager(nettyConfig);
+			}
 		} else {
 			connectionManager = new LocalConnectionManager();
 		}

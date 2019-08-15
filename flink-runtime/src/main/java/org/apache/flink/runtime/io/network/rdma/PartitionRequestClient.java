@@ -76,6 +76,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 	/**
 	 * If zero, the underlying TCP channel can be safely closed.
 	 */
+
 	private final AtomicDisposableReferenceCounter closeReferenceCounter = new AtomicDisposableReferenceCounter();
 
 	PartitionRequestClient(
@@ -128,6 +129,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 			final NettyMessage.PartitionRequest request = new NettyMessage.PartitionRequest(
 				partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
 			NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(request);
+			LOG.info("sending partition request");
 			Class<?> msgClazz = bufferResponseorEvent.getClass();
 			if (msgClazz == NettyMessage.BufferResponse.class) {
 				NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) bufferResponseorEvent;
@@ -140,7 +142,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 			}
 		}while (!partitionReadFinished);
 
-		return null;
+		 return null;
 	}
 
 	/**

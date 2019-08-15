@@ -41,6 +41,7 @@ public class RdmaConfig {
 		InetAddress serverAddress,
 		int serverPort,
 		int memorySegmentSize,
+		int slots,
 		Configuration config, int cqSize) {
 
 		this.serverAddress = checkNotNull(serverAddress);
