@@ -171,7 +171,7 @@ class NettyClient {
 		// --------------------------------------------------------------------
 		// Child channel pipeline for accepted connections
 		// --------------------------------------------------------------------
-
+		LOG.info("Client connection for the address.",serverSocketAddress);
 		bootstrap.handler(new ChannelInitializer<SocketChannel>() {
 			@Override
 			public void initChannel(SocketChannel channel) throws Exception {

@@ -75,7 +75,7 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 	 * @throws IOException
 	 */
 	public RdmaShuffleServerEndpoint createEndpoint(RdmaCmId idPriv, boolean serverSide) throws IOException {
-		return new RdmaShuffleServerEndpoint(endpointGroup, idPriv, serverSide, 100);
+		return new RdmaShuffleServerEndpoint(endpointGroup, idPriv, serverSide, rdmaConfig.getMemorySegmentSize()+100);
 	}
 
 	public RdmaServer(NettyConfig rdmaConfig, NettyBufferPool bufferPool) {

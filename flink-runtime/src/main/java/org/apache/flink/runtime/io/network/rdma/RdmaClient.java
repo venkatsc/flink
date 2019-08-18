@@ -61,14 +61,14 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 		// we have passed our own endpoint factory to the group, therefore new endpoints will be of type
 		// CustomClientEndpoint
 		// let's create a new client endpoint
-		return new RdmaShuffleClientEndpoint(endpointGroup, idPriv, serverSide, 100, clientHandler, bufferPool);
+		return new RdmaShuffleClientEndpoint(endpointGroup, idPriv, serverSide, rdmaConfig.getMemorySegmentSize()+100, clientHandler, bufferPool);
 	}
 
-	public void start() throws IOException {
+	public void start(InetSocketAddress address) throws IOException {
 		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleClientEndpoint>(1000, true, 128, 4, 128);
 		endpointGroup.init(this);
 		endpoint = endpointGroup.createEndpoint();
-		InetSocketAddress address = new InetSocketAddress(rdmaConfig.getServerAddress(), rdmaConfig.getServerPort());
+//		InetSocketAddress address = new InetSocketAddress(rdmaConfig.getServerAddress(), rdmaConfig.getServerPort());
 		try {
 			endpoint.connect(address, 1000);
 		}catch (Exception e){

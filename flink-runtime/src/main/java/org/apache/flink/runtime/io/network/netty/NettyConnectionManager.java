@@ -18,6 +18,9 @@
 
 package org.apache.flink.runtime.io.network.netty;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.flink.runtime.io.network.ConnectionID;
 import org.apache.flink.runtime.io.network.ConnectionManager;
 import org.apache.flink.runtime.io.network.PartitionRequestClientIf;
@@ -27,6 +30,7 @@ import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
 import java.io.IOException;
 
 public class NettyConnectionManager implements ConnectionManager {
+	private static final Logger LOG = LoggerFactory.getLogger(NettyConnectionManager.class);
 
 	private final NettyServer server;
 
@@ -53,6 +57,9 @@ public class NettyConnectionManager implements ConnectionManager {
 
 		client.init(partitionRequestProtocol, bufferPool);
 		server.init(partitionRequestProtocol, bufferPool);
+		LOG.info(" server address local:"+server.getLocalAddress()+" remote:"+server.getRemoteAddress());
+//		LOG.info(" client address local:"+client.getLocalAddress()+" remote:"+client.getRemoteAddress());
+
 	}
 
 	@Override

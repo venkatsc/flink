@@ -26,7 +26,7 @@ public class RdmaServerRequestHandler implements Runnable{
 	private boolean stopped = false;
 	private RdmaServerEndpoint<RdmaShuffleServerEndpoint> serverEndpoint;
 	private int workRequestId=0;
-	private static final Logger LOG = LoggerFactory.getLogger(RdmaServer.class);
+	private static final Logger LOG = LoggerFactory.getLogger(RdmaServerRequestHandler.class);
 
 	private final NettyBufferPool bufferPool;
 	private NettyMessage.NettyMessageDecoder decoder = new NettyMessage.NettyMessageDecoder(false);
@@ -47,6 +47,8 @@ public class RdmaServerRequestHandler implements Runnable{
 		while (!stopped) {
 			try {
 			clientEndpoint = serverEndpoint.accept();
+			LOG.info("Server accepted connection src "+ clientEndpoint.getSrcAddr() + " dst: "+clientEndpoint.getDstAddr());
+			RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 			boolean clientClose = false;
 				while (!clientClose) {
 					IbvWC wc = null;

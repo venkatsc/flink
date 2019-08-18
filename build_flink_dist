@@ -1,0 +1,7 @@
+#!/bin/bash
+#echo 'hi'
+mvn package -pl flink-dist -am  -Dmaven.main.skip  -Dcheckstyle.skip  -DskipTests -Dfast
+
+if [ $? -eq 0 ]; then
+  scp flink-dist/target/flink-dist_2.11-1.8.1.jar cloud-40:~/flink/lib;scp flink-dist/target/flink-dist_2.11-1.8.1.jar cloud-41:~/flink/lib;scp flink-dist/target/flink-dist_2.11-1.8.1.jar cloud-42:~/flink/lib
+fi

@@ -50,38 +50,31 @@ class PartitionRequestClientFactory {
 	PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId) throws Exception {
 		Object entry;
 		PartitionRequestClient client = null;
-		while (client == null) {
-			entry = clients.get(connectionId);
-
-			if (entry != null) {
-				// Existing channel or connecting channel
-				if (entry instanceof PartitionRequestClient) {
-					client = (PartitionRequestClient) entry;
-				}
-			} else {
-				// No channel yet. Create one, but watch out for a race.
-				// We create a "connecting future" and atomically add it to the map.
-				// Only the thread that really added it establishes the channel.
-				// The others need to wait on that original establisher's future.
-				PartitionRequestClientHandler clientHandler = new PartitionRequestClientHandler();
-				client = new PartitionRequestClient(
-					rdmaClient.getEndpoint(), clientHandler, connectionId, this);
+		entry = clients.get(connectionId);
+		if (entry != null) {
+			// Existing channel or connecting channel
+			if (entry instanceof PartitionRequestClient) {
+				client = (PartitionRequestClient) entry;
+			}
+		} else {
+			// No channel yet. Create one, but watch out for a race.
+			// We create a "connecting future" and atomically add it to the map.
+			// Only the thread that really added it establishes the channel.
+			// The others need to wait on that original establisher's future.
+			PartitionRequestClientHandler clientHandler = new PartitionRequestClientHandler();
+			rdmaClient.start(connectionId.getAddress());
+			client = new PartitionRequestClient(
+				rdmaClient.getEndpoint(), clientHandler, connectionId, this);
 //					if (disposeRequestClient) {
 //						partitionRequestClient.disposeIfNotUsed();
 //					}
-				Object old = clients.putIfAbsent(connectionId, client);
-				if (old == null) {
-					rdmaClient.getEndpoint().connect(connectionId.getAddress(), 100);
-				} else {
-					client = (PartitionRequestClient) old;
-				}
-			}
-			// Make sure to increment the reference count before handing a client
-			// out to ensure correct bookkeeping for channel closing.
-			if (!client.incrementReferenceCounter()) {
-				destroyPartitionRequestClient(connectionId, client);
-				client = null;
-			}
+			clients.putIfAbsent(connectionId, client);
+		}
+		// Make sure to increment the reference count before handing a client
+		// out to ensure correct bookkeeping for channel closing.
+		if (!client.incrementReferenceCounter()) {
+			destroyPartitionRequestClient(connectionId, client);
+			client = null;
 		}
 		return client;
 	}

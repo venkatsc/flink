@@ -59,6 +59,8 @@ class NettyServer {
 
 	private InetSocketAddress localAddress;
 
+	private InetSocketAddress remoteAddress;
+
 	NettyServer(NettyConfig config) {
 		this.config = checkNotNull(config);
 		localAddress = null;
@@ -161,6 +163,7 @@ class NettyServer {
 		bindFuture = bootstrap.bind().syncUninterruptibly();
 
 		localAddress = (InetSocketAddress) bindFuture.channel().localAddress();
+		remoteAddress = (InetSocketAddress) bindFuture.channel().remoteAddress();
 
 		final long duration = (System.nanoTime() - start) / 1_000_000;
 		LOG.info("Successful initialization (took {} ms). Listening on SocketAddress {}.", duration, localAddress);
@@ -176,6 +179,10 @@ class NettyServer {
 
 	public InetSocketAddress getLocalAddress() {
 		return localAddress;
+	}
+
+	public InetSocketAddress getRemoteAddress() {
+		return remoteAddress;
 	}
 
 	void shutdown() {

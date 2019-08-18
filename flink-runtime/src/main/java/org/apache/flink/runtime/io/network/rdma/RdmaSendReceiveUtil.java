@@ -23,17 +23,20 @@ import com.ibm.disni.verbs.IbvRecvWR;
 import com.ibm.disni.verbs.IbvSendWR;
 import com.ibm.disni.verbs.IbvSge;
 import com.ibm.disni.verbs.IbvWC;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.LinkedList;
 
 public class RdmaSendReceiveUtil {
+	private static final Logger LOG = LoggerFactory.getLogger(RdmaSendReceiveUtil.class);
 
 	public static void postSendReq(RdmaActiveEndpoint endpoint, int workReqId) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
-			System.out.println("posting wr_id " + workReqId);
+			LOG.info("posting server send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge sendSGE = new IbvSge();
 			sendSGE.setAddr(clientEndpoint.getRegisteredSendMemory().getAddr());
@@ -57,7 +60,7 @@ public class RdmaSendReceiveUtil {
 			clientEndpoint.postSend(sendWRs).execute().free();
 		} else if (endpoint instanceof RdmaShuffleClientEndpoint) {
 			RdmaShuffleClientEndpoint clientEndpoint = (RdmaShuffleClientEndpoint) endpoint;
-			System.out.println("posting wr_id " + workReqId);
+			LOG.info("posting client send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge sendSGE = new IbvSge();
 			sendSGE.setAddr(clientEndpoint.getRegisteredSendMemory().getAddr());
@@ -84,7 +87,7 @@ public class RdmaSendReceiveUtil {
 	public static void postReceiveReq(RdmaActiveEndpoint endpoint, int workReqId) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
-			System.out.println("posting wr_id " + workReqId);
+			LOG.info("posting server receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge recvSGE = new IbvSge();
@@ -101,7 +104,7 @@ public class RdmaSendReceiveUtil {
 			recvWRs.add(recvWR);
 			endpoint.postRecv(recvWRs).execute().free();
 		} else if (endpoint instanceof RdmaShuffleClientEndpoint) {
-			System.out.println("posting wr_id " + workReqId);
+			LOG.info("posting client receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
 			RdmaShuffleClientEndpoint clientEndpoint = (RdmaShuffleClientEndpoint) endpoint;
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge recvSGE = new IbvSge();
@@ -120,43 +123,43 @@ public class RdmaSendReceiveUtil {
 		}
 	}
 
-	public static void repostOnFailure(IbvWC wc1, RdmaShuffleServerEndpoint endpoint, int workRequestId) throws
-		IOException, InterruptedException {
-		while (wc1.getStatus() != 0) {
-			if (wc1.getOpcode() == IbvWC.IbvWcOpcode.IBV_WC_SEND.ordinal()) { // send failure
-				System.out.println("Failed to post send. Reposting");
-				RdmaSendReceiveUtil.postSendReq(endpoint, ++workRequestId);
-				wc1 = endpoint.getWcEvents().take();
-			} else if (wc1.getOpcode() == IbvWC.IbvWcOpcode.IBV_WC_RECV.ordinal()) {
-				System.out.println("opcode wc " + wc1.getOpcode());
-				System.out.println("Failed to post receive");
-				System.out.println("Error vendor: " + wc1.getVendor_err() + " err: " + wc1.getErr());
-
-				RdmaSendReceiveUtil.postReceiveReq(endpoint, ++workRequestId);
-				wc1 = endpoint.getWcEvents().take();
-			} else {
-				System.out.println("Failed request and unintended opcode " + wc1.getOpcode());
-			}
-		}
-	}
-
-	public static void repostOnFailure(IbvWC wc1, RdmaShuffleClientEndpoint endpoint, int workRequestId) throws
-		IOException, InterruptedException {
-		while (wc1.getStatus() != 0) {
-			if (wc1.getOpcode() == IbvWC.IbvWcOpcode.IBV_WC_SEND.ordinal()) { // send failure
-				System.out.println("Failed to post send. Reposting");
-				RdmaSendReceiveUtil.postSendReq(endpoint, ++workRequestId);
-				wc1 = endpoint.getWcEvents().take();
-			} else if (wc1.getOpcode() == IbvWC.IbvWcOpcode.IBV_WC_RECV.ordinal()) {
-				System.out.println("opcode wc " + wc1.getOpcode());
-				System.out.println("Failed to post receive");
-				System.out.println("Error vendor: " + wc1.getVendor_err() + " err: " + wc1.getErr());
-
-				RdmaSendReceiveUtil.postReceiveReq(endpoint, ++workRequestId);
-				wc1 = endpoint.getWcEvents().take();
-			} else {
-				System.out.println("Failed request and unintended opcode " + wc1.getOpcode());
-			}
-		}
-	}
+//	public static void repostOnFailure(IbvWC wc1, RdmaShuffleServerEndpoint endpoint, int workRequestId) throws
+//		IOException, InterruptedException {
+//		while (wc1.getStatus() != 0) {
+//			if (wc1.getOpcode() == IbvWC.IbvWcOpcode.IBV_WC_SEND.ordinal()) { // send failure
+//				System.out.println("Failed to post send. Reposting");
+//				RdmaSendReceiveUtil.postSendReq(endpoint, ++workRequestId);
+//				wc1 = endpoint.getWcEvents().take();
+//			} else if (wc1.getOpcode() == IbvWC.IbvWcOpcode.IBV_WC_RECV.ordinal()) {
+//				System.out.println("opcode wc " + wc1.getOpcode());
+//				System.out.println("Failed to post receive");
+//				System.out.println("Error vendor: " + wc1.getVendor_err() + " err: " + wc1.getErr());
+//
+//				RdmaSendReceiveUtil.postReceiveReq(endpoint, ++workRequestId);
+//				wc1 = endpoint.getWcEvents().take();
+//			} else {
+//				System.out.println("Failed request and unintended opcode " + wc1.getOpcode());
+//			}
+//		}
+//	}
+//
+//	public static void repostOnFailure(IbvWC wc1, RdmaShuffleClientEndpoint endpoint, int workRequestId) throws
+//		IOException, InterruptedException {
+//		while (wc1.getStatus() != 0) {
+//			if (wc1.getOpcode() == IbvWC.IbvWcOpcode.IBV_WC_SEND.ordinal()) { // send failure
+//				System.out.println("Failed to post send. Reposting");
+//				RdmaSendReceiveUtil.postSendReq(endpoint, ++workRequestId);
+//				wc1 = endpoint.getWcEvents().take();
+//			} else if (wc1.getOpcode() == IbvWC.IbvWcOpcode.IBV_WC_RECV.ordinal()) {
+//				System.out.println("opcode wc " + wc1.getOpcode());
+//				System.out.println("Failed to post receive");
+//				System.out.println("Error vendor: " + wc1.getVendor_err() + " err: " + wc1.getErr());
+//
+//				RdmaSendReceiveUtil.postReceiveReq(endpoint, ++workRequestId);
+//				wc1 = endpoint.getWcEvents().take();
+//			} else {
+//				System.out.println("Failed request and unintended opcode " + wc1.getOpcode());
+//			}
+//		}
+//	}
 }

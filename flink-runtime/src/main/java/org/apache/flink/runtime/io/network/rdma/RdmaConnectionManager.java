@@ -53,7 +53,8 @@ public class RdmaConnectionManager implements ConnectionManager {
 		server.setPartitionProvider(partitionProvider);
 		server.setTaskEventDispatcher(taskEventDispatcher);
 		server.start();
-		client.start();
+//		client.start(); // client just initializes, only starts when the createPartitionRequestClient called used ConnectionId
+		// instead of netty config
 		this.partitionRequestClientFactory = new PartitionRequestClientFactory(client);
 	}
 
