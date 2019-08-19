@@ -1,0 +1,6 @@
+#!/bin/bash
+mvn clean package  -Dcheckstyle.skip  -DskipTests -Dfast
+
+if [ $? -eq 0 ];then
+  (cd .. && ./build_flink_dist)
+fi
