@@ -118,30 +118,43 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 		int delayMs) throws IOException {
 
 		checkNotClosed();
-
+		// TODO (venkat): this should be done in seperate thread (see SingleInputGate.java:494)
+		// input channels are iterated over, i.e; future operator has to wait for one by one completion
 		LOG.debug("Requesting subpartition {} of partition {} with {} ms delay.",
 			subpartitionIndex, partitionId, delayMs);
 
 //		clientHandler.addInputChannel(inputChannel);
 
-		boolean partitionReadFinished = false;
+		boolean moreAvailable = false;
 		do {
 			final NettyMessage.PartitionRequest request = new NettyMessage.PartitionRequest(
 				partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
 			NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(request);
-			LOG.info("sending partition request");
-			Class<?> msgClazz = bufferResponseorEvent.getClass();
-			if (msgClazz == NettyMessage.BufferResponse.class) {
-				NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) bufferResponseorEvent;
-				partitionReadFinished = bufferOrEvent.moreAvailable;
+			LOG.info("partition request completed");
+			if (bufferResponseorEvent!=null) {
+				Class<?> msgClazz = bufferResponseorEvent.getClass();
+				if (msgClazz == NettyMessage.BufferResponse.class) {
+					LOG.info("got partition response");
+					NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) bufferResponseorEvent;
+					moreAvailable = bufferOrEvent.moreAvailable;
+					LOG.info("more available {}", moreAvailable);
+					try {
+						// TODO (venkat): decode the message
+						//clientHandler.decodeMsg(bufferOrEvent, false, clientEndpoint);
+					} catch (Throwable t) {
+						LOG.error("decode failure ", t);
+					}
+				}
+			}else{
+				LOG.error("received partition response is null and it should never be the case");
+				moreAvailable =false;
 			}
-			try {
-				clientHandler.decodeMsg(bufferResponseorEvent, false, clientEndpoint);
-			} catch (Throwable t) {
-				LOG.error("decode failure ", t);
+			if (!moreAvailable){
+				LOG.info("Done with this client and sending close request");
+				this.close(inputChannel);
 			}
-		}while (!partitionReadFinished);
-
+		}while (moreAvailable);
+		LOG.info("returned from partition request");
 		 return null;
 	}
 

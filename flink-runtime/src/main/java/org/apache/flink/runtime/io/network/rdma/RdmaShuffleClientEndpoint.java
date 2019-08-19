@@ -113,7 +113,7 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 			RdmaSendReceiveUtil.postSendReq(this, ++workRequestId);
 			for (int i=0;i<2;i++) {
 				IbvWC wc = this.getWcEvents().take();
-				LOG.info("Took completion event {} "+i);
+				LOG.info("Took completion event {} ",i);
 				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 						LOG.error("Receive posting failed. reposting new receive request");
@@ -122,7 +122,7 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 						byte ID =this.getReceiveBuffer().get();
 						switch(ID){
 							case RdmaMessage.BufferResponse.ID:
-								response = NettyMessage.BufferResponse.readFrom(Unpooled.wrappedBuffer(this.receiveBuffer));
+								response = NettyMessage.BufferResponse.readFrom(Unpooled.copiedBuffer(this.receiveBuffer));
 								break;
 							default: LOG.error(" Un-identified request type "+ID);
 						}

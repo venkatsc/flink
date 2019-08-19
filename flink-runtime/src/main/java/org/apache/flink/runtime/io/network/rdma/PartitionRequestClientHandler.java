@@ -119,8 +119,8 @@ class PartitionRequestClientHandler {
 		final Class<?> msgClazz = msg.getClass();
 
 		// ---- Buffer --------------------------------------------------------
-		if (msgClazz == RdmaMessage.BufferResponse.class) {
-			RdmaMessage.BufferResponse bufferOrEvent = (RdmaMessage.BufferResponse) msg;
+		if (msgClazz == NettyMessage.BufferResponse.class) {
+			NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) msg;
 
 			RemoteInputChannel inputChannel = inputChannels.get(bufferOrEvent.receiverId);
 			if (inputChannel == null) {
@@ -134,8 +134,8 @@ class PartitionRequestClientHandler {
 			return decodeBufferOrEvent(inputChannel, bufferOrEvent, isStagedBuffer, clientEndpoint);
 		}
 		// ---- Error ---------------------------------------------------------
-		else if (msgClazz == RdmaMessage.ErrorResponse.class) {
-			RdmaMessage.ErrorResponse error = (RdmaMessage.ErrorResponse) msg;
+		else if (msgClazz == NettyMessage.ErrorResponse.class) {
+			NettyMessage.ErrorResponse error = (NettyMessage.ErrorResponse) msg;
 
 //			SocketAddress remoteAddr = ctx.channel().remoteAddress();
 
@@ -163,13 +163,13 @@ class PartitionRequestClientHandler {
 		return true;
 	}
 
-	private boolean decodeBufferOrEvent(RemoteInputChannel inputChannel, RdmaMessage.BufferResponse bufferOrEvent,
+	private boolean decodeBufferOrEvent(RemoteInputChannel inputChannel, NettyMessage.BufferResponse bufferOrEvent,
 										boolean isStagedBuffer, RdmaShuffleClientEndpoint clientEndpoint) throws
 		Throwable {
 		boolean releaseNettyBuffer = true;
 
 		try {
-			ByteBuf nettyBuffer = bufferOrEvent.getBuffer();
+			ByteBuf nettyBuffer = bufferOrEvent.getNettyBuffer();
 			final int receivedSize = nettyBuffer.readableBytes();
 			if (bufferOrEvent.isBuffer()) {
 				// ---- Buffer ------------------------------------------------

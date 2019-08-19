@@ -46,6 +46,7 @@ public class RdmaServerRequestHandler implements Runnable{
 	public void run() {
 		while (!stopped) {
 			try {
+			// TODO: accept should be seperated into other thread
 			clientEndpoint = serverEndpoint.accept();
 			LOG.info("Server accepted connection src "+ clientEndpoint.getSrcAddr() + " dst: "+clientEndpoint.getDstAddr());
 			RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
