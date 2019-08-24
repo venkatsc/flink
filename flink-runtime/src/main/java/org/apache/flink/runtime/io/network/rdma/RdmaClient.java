@@ -68,7 +68,6 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleClientEndpoint>(1000, true, 128, 4, 128);
 		endpointGroup.init(this);
 		endpoint = endpointGroup.createEndpoint();
-//		InetSocketAddress address = new InetSocketAddress(rdmaConfig.getServerAddress(), rdmaConfig.getServerPort());
 		try {
 			endpoint.connect(address, 1000);
 		}catch (Exception e){
@@ -79,26 +78,7 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 		System.out.println("SimpleClient::client channel set up ");
 		// start and post a receive
 		RdmaSendReceiveUtil.postReceiveReq(endpoint, ++workRequestId);
-//		RdmaMessage.PartitionRequest request = new RdmaMessage.PartitionRequest();
-//		request.writeTo(endpoint.getSendBuffer());
-//		RdmaSendReceiveUtil.postSendReq(endpoint, ++workRequestId);
-//		while (i <= 50) {
 	}
-
-
-
-//	public static void main(String[] args) throws Exception {
-//		CmdLineCommon cmdLine = new CmdLineCommon("RdmaClient");
-//		try {
-//			cmdLine.parse(args);
-//		} catch (ParseException e) {
-//			cmdLine.printHelp();
-//			System.exit(-1);
-//		}
-//		RdmaConfig rdmaConfig = new RdmaConfig(InetAddress.getByName(cmdLine.getIp()), cmdLine.getPort());
-//		RdmaClient client = new RdmaClient(rdmaConfig, null, null); // TODO: need to pass client partition handler
-//		client.run();
-//	}
 
 	public void stop() {
 		try {

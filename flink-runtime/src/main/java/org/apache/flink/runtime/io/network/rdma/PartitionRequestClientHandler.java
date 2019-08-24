@@ -101,6 +101,9 @@ class PartitionRequestClientHandler {
 //		}
 //	}
 //
+	public void addInputChannel(RemoteInputChannel listener) throws IOException {
+		inputChannels.putIfAbsent(listener.getInputChannelId(), listener);
+	}
 	private void notifyAllChannelsOfErrorAndClose(Throwable cause, RdmaShuffleClientEndpoint clientEndpoint) {
 		System.out.println("Error ---->");
 		System.out.println(cause.getMessage());
@@ -114,7 +117,8 @@ class PartitionRequestClientHandler {
 	}
 
 	// ------------------------------------------------------------------------
-	public boolean decodeMsg(Object msg, boolean isStagedBuffer, RdmaShuffleClientEndpoint clientEndpoint) throws
+	public void decodeMsg(Object msg, boolean isStagedBuffer, RdmaShuffleClientEndpoint clientEndpoint,
+						  RemoteInputChannel inputChannel) throws
 		Throwable {
 		final Class<?> msgClazz = msg.getClass();
 
@@ -122,16 +126,15 @@ class PartitionRequestClientHandler {
 		if (msgClazz == NettyMessage.BufferResponse.class) {
 			NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) msg;
 
-			RemoteInputChannel inputChannel = inputChannels.get(bufferOrEvent.receiverId);
+//			RemoteInputChannel inputChannel = inputChannels.get(bufferOrEvent.receiverId);
 			if (inputChannel == null) {
 				bufferOrEvent.releaseBuffer();
 
 				cancelRequestFor(bufferOrEvent.receiverId, clientEndpoint);
 
-				return true;
 			}
 
-			return decodeBufferOrEvent(inputChannel, bufferOrEvent, isStagedBuffer, clientEndpoint);
+			decodeBufferOrEvent(inputChannel, bufferOrEvent, isStagedBuffer, clientEndpoint);
 		}
 		// ---- Error ---------------------------------------------------------
 		else if (msgClazz == NettyMessage.ErrorResponse.class) {
@@ -144,7 +147,7 @@ class PartitionRequestClientHandler {
 					"Fatal error at remote task manager '" + clientEndpoint.getSrcAddr() + "'.",
 					clientEndpoint.getDstAddr(), error.cause), clientEndpoint);
 			} else {
-				RemoteInputChannel inputChannel = inputChannels.get(error.receiverId);
+//				RemoteInputChannel inputChannel = inputChannels.get(error.receiverId);
 
 				if (inputChannel != null) {
 					if (error.cause.getClass() == PartitionNotFoundException.class) {
@@ -160,10 +163,10 @@ class PartitionRequestClientHandler {
 			throw new IllegalStateException("Received unknown message from producer: " + msg.getClass());
 		}
 
-		return true;
+//		return true;
 	}
 
-	private boolean decodeBufferOrEvent(RemoteInputChannel inputChannel, NettyMessage.BufferResponse bufferOrEvent,
+	private void decodeBufferOrEvent(RemoteInputChannel inputChannel, NettyMessage.BufferResponse bufferOrEvent,
 										boolean isStagedBuffer, RdmaShuffleClientEndpoint clientEndpoint) throws
 		Throwable {
 		boolean releaseNettyBuffer = true;
@@ -178,26 +181,24 @@ class PartitionRequestClientHandler {
 				// IndexOutOfBoundsException.
 				if (receivedSize == 0) {
 					inputChannel.onEmptyBuffer(bufferOrEvent.sequenceNumber, -1);
-					return true;
 				}
 
 				BufferProvider bufferProvider = inputChannel.getBufferProvider();
 
 				if (bufferProvider == null) {
 					// receiver has been cancelled/failed
+					LOG.info("receiver cancelled/failed");
 					cancelRequestFor(bufferOrEvent.receiverId, clientEndpoint);
-					return isStagedBuffer;
 				}
-
-				while (true) {
+				boolean readFinished= false;
+				do {
 					Buffer buffer = bufferProvider.requestBuffer();
-
 					if (buffer != null) {
 						nettyBuffer.readBytes(buffer.asByteBuf(), receivedSize);
 
 						inputChannel.onBuffer(buffer, bufferOrEvent.sequenceNumber, -1);
-
-						return true;
+						LOG.info("onBuffer finished");
+						readFinished = true;
 					}
 //					else if (bufferListener.waitForBuffer(bufferProvider, bufferOrEvent)) {
 //						releaseNettyBuffer = false;
@@ -205,10 +206,11 @@ class PartitionRequestClientHandler {
 //						return false;
 //					}
 					else if (bufferProvider.isDestroyed()) {
-						return isStagedBuffer;
+						LOG.info("buffer provider is destroyed");
 					}
-				}
+				} while (!readFinished);
 			} else {
+				LOG.info("in event");
 				// ---- Event -------------------------------------------------
 				// TODO We can just keep the serialized data in the Netty buffer and release it later at the reader
 				byte[] byteArray = new byte[receivedSize];
@@ -219,7 +221,6 @@ class PartitionRequestClientHandler {
 
 				inputChannel.onBuffer(buffer, bufferOrEvent.sequenceNumber, -1);
 
-				return true;
 			}
 		} finally {
 			if (releaseNettyBuffer) {

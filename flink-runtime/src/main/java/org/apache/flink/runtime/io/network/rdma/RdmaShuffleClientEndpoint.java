@@ -119,10 +119,13 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 						LOG.error("Receive posting failed. reposting new receive request");
 						RdmaSendReceiveUtil.postReceiveReq(this, ++workRequestId);
 					} else { // first receive succeeded. Read the data and repost the next message
+						this.getReceiveBuffer().getInt(); // discard frame length
+						this.getReceiveBuffer().getInt(); // discard magic number
 						byte ID =this.getReceiveBuffer().get();
 						switch(ID){
-							case RdmaMessage.BufferResponse.ID:
-								response = NettyMessage.BufferResponse.readFrom(Unpooled.copiedBuffer(this.receiveBuffer));
+							case NettyMessage.BufferResponse.ID:
+								response = NettyMessage.BufferResponse.readFrom(Unpooled.wrappedBuffer(this.receiveBuffer));
+								LOG.error(" Response received with seq.number: "+ ((NettyMessage.BufferResponse) response).sequenceNumber);
 								break;
 							default: LOG.error(" Un-identified request type "+ID);
 						}

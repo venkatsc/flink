@@ -263,7 +263,7 @@ public abstract class NettyMessage {
 
 	static class BufferResponse extends NettyMessage {
 
-		private static final byte ID = 0;
+		public static final byte ID = 0;
 
 		final ByteBuf buffer;
 
@@ -322,8 +322,8 @@ public abstract class NettyMessage {
 
 		@Override
 		ByteBuf write(ByteBufAllocator allocator) throws IOException {
-			// receiver ID (16), sequence number (4), backlog (4), isBuffer (1), buffer size (4)
-			final int messageHeaderLength = 16 + 4 + 4 + 1 + 4;
+			// receiver ID (16), sequence number (4), backlog (4), isBuffer (1), moreAvailable(1), buffer size (4)
+			final int messageHeaderLength = 16 + 4 + 4 + 1+1 + 4;
 
 			ByteBuf headerBuf = null;
 			try {
@@ -360,6 +360,8 @@ public abstract class NettyMessage {
 		}
 
 		static BufferResponse readFrom(ByteBuf buffer) {
+			// TODO (venkat): we don't need it after using nio buffers instead of Netty buffers
+//			buffer.readByte(); // remove ID of wrapped buffer
 			InputChannelID receiverId = InputChannelID.fromByteBuf(buffer);
 			int sequenceNumber = buffer.readInt();
 			int backlog = buffer.readInt();

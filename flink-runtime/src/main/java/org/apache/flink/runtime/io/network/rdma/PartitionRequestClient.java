@@ -127,6 +127,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 
 		boolean moreAvailable = false;
 		do {
+
 			final NettyMessage.PartitionRequest request = new NettyMessage.PartitionRequest(
 				partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
 			NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(request);
@@ -140,19 +141,23 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 					LOG.info("more available {}", moreAvailable);
 					try {
 						// TODO (venkat): decode the message
-						//clientHandler.decodeMsg(bufferOrEvent, false, clientEndpoint);
+						clientHandler.decodeMsg(bufferOrEvent, false, clientEndpoint,inputChannel);
 					} catch (Throwable t) {
 						LOG.error("decode failure ", t);
 					}
+				}else{
+					LOG.info("received message type is not handled "+msgClazz.toString());
+					moreAvailable =false;
 				}
 			}else{
 				LOG.error("received partition response is null and it should never be the case");
 				moreAvailable =false;
 			}
-			if (!moreAvailable){
-				LOG.info("Done with this client and sending close request");
-				this.close(inputChannel);
-			}
+//			if (!moreAvailable){
+//				LOG.info("Done with this client and sending close request");
+//				this.close(inputChannel); // TODO (venkat): do not close it here, endpoint TaskEvents to send.
+//				// see SingleInputGate.java:496
+//			}
 		}while (moreAvailable);
 		LOG.info("returned from partition request");
 		 return null;
@@ -174,7 +179,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 			partitionId, inputChannel.getInputChannelId()));
 
 		try {
-			clientHandler.decodeMsg(bufferResponseorEvent, false, clientEndpoint);
+			clientHandler.decodeMsg(bufferResponseorEvent, false, clientEndpoint, inputChannel);
 		} catch (Throwable t) {
 			LOG.error("decode failure ", t);
 		}
