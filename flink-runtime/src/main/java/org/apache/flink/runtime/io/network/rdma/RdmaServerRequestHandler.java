@@ -140,7 +140,12 @@ public class RdmaServerRequestHandler implements Runnable {
 							NettyMessage clientRequest = decodeMessageFromBuffer(clientEndpoint.getReceiveBuffer());
 							Class<?> msgClazz = clientRequest.getClass();
 							if (msgClazz == NettyMessage.CloseRequest.class) {
-								clientClose = true;
+//								clientClose = true;
+								for (InputChannelID channelID: readers.keySet()){
+									NetworkSequenceViewReader reader = readers.get(channelID);
+									reader.notifySubpartitionConsumed();
+									reader.releaseAllResources();
+								}
 							} else if (msgClazz == NettyMessage.PartitionRequest.class) {
 								LOG.info("received partition request");
 								// prepare response and post it

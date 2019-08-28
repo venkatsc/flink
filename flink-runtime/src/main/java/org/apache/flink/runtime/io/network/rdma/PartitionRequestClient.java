@@ -194,10 +194,10 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 			// Close the TCP connection. Send a close request msg to ensure
 			// that outstanding backwards task events are not discarded.
 			//			tcpChannel.writeAndFlush(new NettyMessage.CloseRequest());
-			clientEndpoint.writeAndRead(new NettyMessage.CloseRequest());
+//			clientEndpoint.writeAndRead(new NettyMessage.CloseRequest());
 
 			// Make sure to remove the client from the factory
-			clientFactory.destroyPartitionRequestClient(connectionId, this);
+//			clientFactory.destroyPartitionRequestClient(connectionId, this);
 		} else {
 			clientHandler.cancelRequestFor(inputChannel.getInputChannelId(), clientEndpoint);
 		}
