@@ -164,9 +164,10 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 			// Create a client and request the partition
 			partitionRequestClient = connectionManager
 				.createPartitionRequestClient(connectionId);
-		}
 		partitionRequestClient.requestSubpartition(partitionId, subpartitionIndex, this, 0);
+		}
 	}
+
 
 	/**
 	 * Retriggers a remote subpartition request.

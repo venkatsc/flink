@@ -75,14 +75,15 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 			throw new IOException("client failed to start");
 		}
 
-		System.out.println("SimpleClient::client channel set up ");
+		LOG.info("SimpleClient::client channel set up ");
 		// start and post a receive
 		RdmaSendReceiveUtil.postReceiveReq(endpoint, ++workRequestId);
 	}
 
 	public void stop() {
 		try {
-			System.out.println("server endpoint closed");
+			LOG.info("client endpoint closed. src: "+ endpoint.getSrcAddr() + " dst: " +endpoint.getDstAddr());
+			endpoint.terminate();
 			endpointGroup.close();
 		} catch (Exception e) {
 			LOG.error(e.getMessage());

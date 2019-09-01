@@ -48,6 +48,7 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 	private ByteBuffer availableFreeReceiveBuffers;
 	private IbvMr availableFreeReceiveBuffersRegisteredMemory;
 	private PartitionRequestClientHandler clientHandler;
+	private boolean isClosed = false;
 
 	private ArrayBlockingQueue<IbvWC> wcEvents = new ArrayBlockingQueue<>(1000);
 	private static int workRequestId;
@@ -159,11 +160,17 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 
 	public void terminate() {
 		try {
+			isClosed = true;
 			this.close();
 		} catch (IOException e) {
 			e.printStackTrace();
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
+	}
+
+	@Override
+	public boolean isClosed() {
+		return isClosed;
 	}
 }

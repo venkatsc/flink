@@ -404,7 +404,7 @@ public class TaskManagerServices {
 			segmentSize);
 
 		ConnectionManager connectionManager;
-		boolean enableCreditBased = false;
+		boolean enableCreditBased = true;
 		NettyConfig nettyConfig = networkEnvironmentConfiguration.nettyConfig();
 		if (nettyConfig != null) {
 			if (!nettyConfig.isRdmaEnabled()) {

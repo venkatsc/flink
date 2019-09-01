@@ -69,17 +69,9 @@ public class RdmaServerRequestHandler implements Runnable {
 		return clientMessage;
 	}
 
-	private NettyMessage readPartition(NettyMessage.PartitionRequest request) throws IOException,
+	private NettyMessage readPartition(NettyMessage.PartitionRequest request, NetworkSequenceViewReader reader) throws
+		IOException,
 		InterruptedException {
-		NetworkSequenceViewReader reader = readers.get(request.receiverId);
-		if (reader == null) {
-			reader = new SequenceNumberingViewReader(request.receiverId);
-			reader.requestSubpartitionView(
-				partitionProvider,
-				request.partitionId,
-				request.queueIndex);
-			readers.put(request.receiverId, reader);
-		}
 		InputChannel.BufferAndAvailability next = null;
 		while (true) {
 			next = reader.getNextBuffer();
@@ -99,8 +91,10 @@ public class RdmaServerRequestHandler implements Runnable {
 				// This channel was now removed from the available reader queue.
 				// We re-add it into the queue if it is still available
 				if (next.moreAvailable()) {
+					LOG.info("server more available: true");
 					reader.setRegisteredAsAvailable(true);
 				} else {
+					LOG.info("server more available: false");
 					reader.setRegisteredAsAvailable(false);
 				}
 				LOG.info("Sending BufferResponse message");
@@ -140,24 +134,47 @@ public class RdmaServerRequestHandler implements Runnable {
 							NettyMessage clientRequest = decodeMessageFromBuffer(clientEndpoint.getReceiveBuffer());
 							Class<?> msgClazz = clientRequest.getClass();
 							if (msgClazz == NettyMessage.CloseRequest.class) {
-//								clientClose = true;
-								for (InputChannelID channelID: readers.keySet()){
-									NetworkSequenceViewReader reader = readers.get(channelID);
-									reader.notifySubpartitionConsumed();
-									reader.releaseAllResources();
-								}
+								clientClose = true;
+
+								LOG.info("closing the connection");
+//								for (InputChannelID channelID: readers.keySet()){
+//									NetworkSequenceViewReader reader = readers.get(channelID);
+//									reader.notifySubpartitionConsumed();
+//									reader.releaseAllResources();
+//								}
 							} else if (msgClazz == NettyMessage.PartitionRequest.class) {
-								LOG.info("received partition request");
 								// prepare response and post it
 								NettyMessage.PartitionRequest partitionRequest = (NettyMessage.PartitionRequest)
 									clientRequest;
-								NettyMessage response = readPartition(partitionRequest);
-								LOG.error(" Sending partition with seq. number: "+ ((NettyMessage.BufferResponse) response).sequenceNumber);
+								LOG.info("received partition request " + partitionRequest.receiverId);
+								NetworkSequenceViewReader reader = readers.get(partitionRequest.receiverId);
+								if (reader == null) {
+									reader = new SequenceNumberingViewReader(partitionRequest.receiverId);
+									reader.requestSubpartitionView(
+										partitionProvider,
+										partitionRequest.partitionId,
+										partitionRequest.queueIndex);
+									readers.put(partitionRequest.receiverId, reader);
+								}
+								// TODO(venkat): do something better here, we should not poll reader
+								while (!reader.isRegisteredAsAvailable()) {
+								}
+
+								NettyMessage response = readPartition(partitionRequest, reader);
+								LOG.error(" Sending partition with seq. number: " + ((NettyMessage.BufferResponse)
+									response).sequenceNumber);
 								clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
 								clientEndpoint.getReceiveBuffer().clear();
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
 								// receive
 								RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+//								if (!reader.isRegisteredAsAvailable()) {
+//									LOG.error("Notifying the sub-partition consume");
+//									reader.notifySubpartitionConsumed();
+//									reader.releaseAllResources();
+//								} else {
+//									LOG.error("Still not finished subpartition");
+//								}
 							} else if (msgClazz == RdmaMessage.TaskEventRequest.class) {
 								NettyMessage.TaskEventRequest request = (NettyMessage.TaskEventRequest) clientRequest;
 								LOG.error("Unhandled request type TaskEventRequest");
@@ -202,6 +219,8 @@ public class RdmaServerRequestHandler implements Runnable {
 					}
 					// TODO: create requested handler
 				}
+				LOG.info("Server for client endpoint closed. src: " + clientEndpoint.getSrcAddr() + " dst: " +
+					clientEndpoint.getDstAddr());
 				clientEndpoint.close();
 			} catch (Exception e) {
 				LOG.error("error handling client request ", e);

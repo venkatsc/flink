@@ -18,6 +18,9 @@
 
 package org.apache.flink.runtime.io.network.rdma;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.flink.runtime.io.network.ConnectionID;
 import org.apache.flink.runtime.io.network.PartitionRequestClientIf;
 import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel;
@@ -38,6 +41,7 @@ import java.util.concurrent.ConcurrentMap;
 class PartitionRequestClientFactory {
 	private final RdmaClient rdmaClient;
 	private final ConcurrentMap<ConnectionID, Object> clients = new ConcurrentHashMap<ConnectionID, Object>();
+	private static final Logger LOG = LoggerFactory.getLogger(PartitionRequestClientFactory.class);
 
 	PartitionRequestClientFactory(RdmaClient rdmaClient) {
 		this.rdmaClient = rdmaClient;
@@ -80,6 +84,11 @@ class PartitionRequestClientFactory {
 	}
 
 	public void closeOpenChannelConnections(ConnectionID connectionId) {
+		LOG.info("Asked to close the client connection");
+		if (rdmaClient!=null){
+			LOG.info("closing the client connection");
+			rdmaClient.stop();
+		}
 	}
 
 	int getNumberOfActiveClients() {

@@ -695,20 +695,24 @@ public class Task implements Runnable, TaskActions, CheckpointListener {
 			// we must make strictly sure that the invokable is accessible to the cancel() call
 			// by the time we switched to running.
 			this.invokable = invokable;
+			LOG.info("-----> moving tasks to RUNNING state {}",taskNameWithSubtask);
 
 			// switch to the RUNNING state, if that fails, we have been canceled/failed in the meantime
 			if (!transitionState(ExecutionState.DEPLOYING, ExecutionState.RUNNING)) {
 				throw new CancelTaskException();
 			}
 
+			LOG.info("-----> moved tasks to RUNNING state {}",taskNameWithSubtask);
+
 			// notify everyone that we switched to running
 			taskManagerActions.updateTaskExecutionState(new TaskExecutionState(jobId, executionId, ExecutionState.RUNNING));
 
 			// make sure the user code classloader is accessible thread-locally
 			executingThread.setContextClassLoader(userCodeClassLoader);
-
+			LOG.info("-----> invoking execution {}", taskNameWithSubtask);
 			// run the invokable
 			invokable.invoke();
+			LOG.info("-----> invoke completed {}", taskNameWithSubtask);
 
 			// make sure, we enter the catch block if the task leaves the invoke() method due
 			// to the fact that it has been canceled
@@ -721,17 +725,25 @@ public class Task implements Runnable, TaskActions, CheckpointListener {
 			// ----------------------------------------------------------------
 
 			// finish the produced partitions. if this fails, we consider the execution failed.
+			LOG.info("-----> finishing partitions: {}", taskNameWithSubtask);
 			for (ResultPartition partition : producedPartitions) {
 				if (partition != null) {
+					LOG.info("-----> partition not null");
 					partition.finish();
+				}else{
+					LOG.info("-----> partition is null");
 				}
 			}
+			LOG.info("-----> moving tasks to FINISHED state: {} ",taskNameWithSubtask);
+
 
 			// try to mark the task as finished
 			// if that fails, the task was canceled/failed in the meantime
 			if (!transitionState(ExecutionState.RUNNING, ExecutionState.FINISHED)) {
 				throw new CancelTaskException();
 			}
+
+			LOG.info("-----> moved tasks to FINISHED state: {}",taskNameWithSubtask);
 		}
 		catch (Throwable t) {
 

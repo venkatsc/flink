@@ -457,6 +457,7 @@ public class SingleInputGate implements InputGate {
 
 		if (released) {
 			synchronized (inputChannelsWithData) {
+				LOG.info("Releasing inputgate and all resources");
 				inputChannelsWithData.notifyAll();
 			}
 		}
@@ -536,6 +537,7 @@ public class SingleInputGate implements InputGate {
 					}
 
 					if (blocking) {
+						LOG.info("Blocking inputgate");
 						inputChannelsWithData.wait();
 					}
 					else {
@@ -554,12 +556,13 @@ public class SingleInputGate implements InputGate {
 		// this channel was now removed from the non-empty channels queue
 		// we re-add it in case it has more data, because in that case no "non-empty" notification
 		// will come for that channel
+		final Buffer buffer = result.get().buffer();
+		LOG.info("Received the buffer, is more available? {} on channel {}", result.get().moreAvailable(),currentChannel);
 		if (result.get().moreAvailable()) {
 			queueChannel(currentChannel);
 			moreAvailable = true;
 		}
 
-		final Buffer buffer = result.get().buffer();
 		if (buffer.isBuffer()) {
 			return Optional.of(new BufferOrEvent(buffer, currentChannel.getChannelIndex(), moreAvailable));
 		}
@@ -578,12 +581,11 @@ public class SingleInputGate implements InputGate {
 					moreAvailable = false;
 					hasReceivedAllEndOfPartitionEvents = true;
 				}
-
+				LOG.debug("End of partition event received. Releasing resources on the channel"+ currentChannel);
 				currentChannel.notifySubpartitionConsumed();
-
 				currentChannel.releaseAllResources();
 			}
-
+			LOG.debug("No more buffers available on the channel "+ currentChannel);
 			return Optional.of(new BufferOrEvent(event, currentChannel.getChannelIndex(), moreAvailable));
 		}
 	}
@@ -635,6 +637,7 @@ public class SingleInputGate implements InputGate {
 			enqueuedInputChannelsWithData.set(channel.getChannelIndex());
 
 			if (availableChannels == 0) {
+				LOG.info("Releasing inputgate on buffer");
 				inputChannelsWithData.notifyAll();
 			}
 		}

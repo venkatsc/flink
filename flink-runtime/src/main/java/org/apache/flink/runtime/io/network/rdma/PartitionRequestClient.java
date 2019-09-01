@@ -118,6 +118,10 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 		int delayMs) throws IOException {
 
 		checkNotClosed();
+		PartitionReaderClient readerClient = new PartitionReaderClient(partitionId, subpartitionIndex, inputChannel,delayMs,clientEndpoint,clientHandler );
+		Thread clientReaderThread = new Thread(readerClient);
+		clientReaderThread.start();
+
 		// TODO (venkat): this should be done in seperate thread (see SingleInputGate.java:494)
 		// input channels are iterated over, i.e; future operator has to wait for one by one completion
 		LOG.debug("Requesting subpartition {} of partition {} with {} ms delay.",
@@ -125,42 +129,9 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 
 //		clientHandler.addInputChannel(inputChannel);
 
-		boolean moreAvailable = false;
-		do {
 
-			final NettyMessage.PartitionRequest request = new NettyMessage.PartitionRequest(
-				partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
-			NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(request);
-			LOG.info("partition request completed");
-			if (bufferResponseorEvent!=null) {
-				Class<?> msgClazz = bufferResponseorEvent.getClass();
-				if (msgClazz == NettyMessage.BufferResponse.class) {
-					LOG.info("got partition response");
-					NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) bufferResponseorEvent;
-					moreAvailable = bufferOrEvent.moreAvailable;
-					LOG.info("more available {}", moreAvailable);
-					try {
-						// TODO (venkat): decode the message
-						clientHandler.decodeMsg(bufferOrEvent, false, clientEndpoint,inputChannel);
-					} catch (Throwable t) {
-						LOG.error("decode failure ", t);
-					}
-				}else{
-					LOG.info("received message type is not handled "+msgClazz.toString());
-					moreAvailable =false;
-				}
-			}else{
-				LOG.error("received partition response is null and it should never be the case");
-				moreAvailable =false;
-			}
-//			if (!moreAvailable){
-//				LOG.info("Done with this client and sending close request");
-//				this.close(inputChannel); // TODO (venkat): do not close it here, endpoint TaskEvents to send.
-//				// see SingleInputGate.java:496
-//			}
-		}while (moreAvailable);
 		LOG.info("returned from partition request");
-		 return null;
+		return null;
 	}
 
 	/**
@@ -194,10 +165,13 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 			// Close the TCP connection. Send a close request msg to ensure
 			// that outstanding backwards task events are not discarded.
 			//			tcpChannel.writeAndFlush(new NettyMessage.CloseRequest());
-//			clientEndpoint.writeAndRead(new NettyMessage.CloseRequest());
-
+			try{
+			 clientEndpoint.writeAndRead(new NettyMessage.CloseRequest()); // TODO(venkat): need clean way to write close request
+			}catch (Exception e){
+				LOG.error("Failed sending close request ",e);
+			}
 			// Make sure to remove the client from the factory
-//			clientFactory.destroyPartitionRequestClient(connectionId, this);
+			clientFactory.destroyPartitionRequestClient(connectionId, this);
 		} else {
 			clientHandler.cancelRequestFor(inputChannel.getInputChannelId(), clientEndpoint);
 		}
@@ -209,6 +183,67 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 			final SocketAddress remoteAddr = clientEndpoint.getDstAddr();
 			throw new LocalTransportException(String.format("Channel to '%s' closed.", remoteAddr), localAddr);
 		}
+	}
+}
+
+class PartitionReaderClient implements Runnable {
+	private static final Logger LOG = LoggerFactory.getLogger(PartitionReaderClient.class);
+	private ResultPartitionID partitionId;
+	private int subpartitionIndex;
+	private RemoteInputChannel inputChannel;
+	private int delayMs;
+	private final RdmaShuffleClientEndpoint clientEndpoint;
+	private final PartitionRequestClientHandler clientHandler;
+
+	public PartitionReaderClient(final ResultPartitionID partitionId,
+								 final int subpartitionIndex,
+								 final RemoteInputChannel inputChannel,
+								 int delayMs, RdmaShuffleClientEndpoint clientEndpoint, final
+								 PartitionRequestClientHandler clientHandler) {
+		this.partitionId = partitionId;
+		this.subpartitionIndex = subpartitionIndex;
+		this.inputChannel = inputChannel;
+		this.clientHandler = clientHandler;
+		this.delayMs = delayMs;
+		this.clientEndpoint = clientEndpoint;
+	}
+
+	@Override
+	public void run() {
+		boolean moreAvailable = false;
+		do {
+			LOG.info("sending partition completed. input channel is closed? {}",inputChannel.isReleased());
+			final NettyMessage.PartitionRequest request = new NettyMessage.PartitionRequest(
+				partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
+			NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(request);
+			LOG.info("partition request completed");
+			if (bufferResponseorEvent != null) {
+				Class<?> msgClazz = bufferResponseorEvent.getClass();
+				if (msgClazz == NettyMessage.BufferResponse.class) {
+					LOG.info("got partition response");
+					NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) bufferResponseorEvent;
+					moreAvailable = bufferOrEvent.moreAvailable;
+					LOG.info("more available {}", moreAvailable);
+					try {
+						// TODO (venkat): decode the message
+						clientHandler.decodeMsg(bufferOrEvent, false, clientEndpoint, inputChannel);
+					} catch (Throwable t) {
+						LOG.error("decode failure ", t);
+					}
+				} else {
+					LOG.info("received message type is not handled " + msgClazz.toString());
+					moreAvailable = false;
+				}
+			} else {
+				LOG.error("received partition response is null and it should never be the case");
+				moreAvailable = false;
+			}
+//			if (!moreAvailable){
+//				LOG.info("Done with this client and sending close request");
+//				this.close(inputChannel); // TODO (venkat): do not close it here, endpoint TaskEvents to send.
+//				// see SingleInputGate.java:496
+//			}
+		} while (!inputChannel.isReleased());
 	}
 }
 

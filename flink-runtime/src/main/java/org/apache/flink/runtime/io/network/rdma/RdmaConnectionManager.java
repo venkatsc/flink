@@ -18,6 +18,9 @@
 
 package org.apache.flink.runtime.io.network.rdma;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 
 import org.apache.flink.runtime.io.network.ConnectionID;
@@ -29,6 +32,7 @@ import org.apache.flink.runtime.io.network.netty.NettyConfig;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
 
 public class RdmaConnectionManager implements ConnectionManager {
+	private static final Logger LOG = LoggerFactory.getLogger(RdmaConnectionManager.class);
 
 	private final RdmaServer server;
 
@@ -62,7 +66,12 @@ public class RdmaConnectionManager implements ConnectionManager {
 	public PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId) throws IOException,
 		InterruptedException {
 		try {
-			return partitionRequestClientFactory.createPartitionRequestClient(connectionId);
+			PartitionRequestClientIf partitionRequestClient = partitionRequestClientFactory.createPartitionRequestClient(connectionId);
+			LOG.info("creating partition client for connection id "+ connectionId.toString());
+			if (partitionRequestClient==null){
+				LOG.error("empty part partition client");
+			}
+			return partitionRequestClient;
 		} catch (Exception e) {
 			throw new IOException(e);
 		}

@@ -126,6 +126,7 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 //	}
 	public void stop() {
 		try {
+			LOG.info("Server endpoint closed. src: "+ this.getSrcAddr() + " dst: " +this.getDstAddr());
 			this.close();
 		} catch (IOException e) {
 			e.printStackTrace();

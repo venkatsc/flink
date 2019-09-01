@@ -18,6 +18,9 @@
 
 package org.apache.flink.runtime.io.network.rdma;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 
 import org.apache.flink.runtime.io.network.NetworkSequenceViewReader;
@@ -37,6 +40,8 @@ import org.apache.flink.runtime.io.network.partition.consumer.LocalInputChannel;
  * handler about non-emptiness, similar to the {@link LocalInputChannel}.
  */
 class SequenceNumberingViewReader implements BufferAvailabilityListener, NetworkSequenceViewReader {
+	private static final Logger LOG = LoggerFactory.getLogger(SequenceNumberingViewReader.class);
+
 
 	private final Object requestLock = new Object();
 
@@ -45,6 +50,7 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 	private volatile ResultSubpartitionView subpartitionView;
 
 	private int sequenceNumber = -1;
+	private int availableSeqNumber=-1; // counts how many data available notifications raised.
 
 	private boolean isRegisteredAvailable;
 
@@ -81,12 +87,16 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 
 	@Override
 	public void setRegisteredAsAvailable(boolean isRegisteredAvailable) {
-		this.isRegisteredAvailable = isRegisteredAvailable;
+		synchronized (this) {
+			this.isRegisteredAvailable = isRegisteredAvailable;
+		}
 	}
 
 	@Override
 	public boolean isRegisteredAsAvailable() {
-		return isRegisteredAvailable;
+		synchronized (this) {
+			return isRegisteredAvailable;
+		}
 	}
 
 	@Override
@@ -137,7 +147,8 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 
 	@Override
 	public void notifyDataAvailable() {
-//		requestQueue.notifyReaderNonEmpty(this);
+		LOG.debug("Received data available notification "+this);//		requestQueue.notifyReaderNonEmpty(this); // TODO (venkat): Might read the data before available
+		this.setRegisteredAsAvailable(true);
 	}
 
 	@Override
