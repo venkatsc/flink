@@ -18,6 +18,9 @@
 
 package org.apache.flink.runtime.io.network.api.reader;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.flink.core.io.IOReadableWritable;
 import org.apache.flink.runtime.io.network.api.serialization.RecordDeserializer;
 import org.apache.flink.runtime.io.network.api.serialization.RecordDeserializer.DeserializationResult;
@@ -36,6 +39,7 @@ import java.io.IOException;
  * @param <T> The type of the record that can be read with this record reader.
  */
 abstract class AbstractRecordReader<T extends IOReadableWritable> extends AbstractReader implements ReaderBase {
+	private static final Logger LOG = LoggerFactory.getLogger(AbstractReader.class);
 
 	private final RecordDeserializer<T>[] recordDeserializers;
 
@@ -99,7 +103,7 @@ abstract class AbstractRecordReader<T extends IOReadableWritable> extends Abstra
 							+ "If you are using custom serialization code (Writable or Value types), check their "
 							+ "serialization routines. In the case of Kryo, check the respective Kryo serializer.");
 				}
-
+				LOG.info("Received event");
 				if (handleEvent(bufferOrEvent.getEvent())) {
 					if (inputGate.isFinished()) {
 						isFinished = true;

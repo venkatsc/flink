@@ -24,16 +24,21 @@ import org.apache.flink.runtime.io.network.api.EndOfPartitionEvent;
 import org.apache.flink.runtime.io.network.api.EndOfSuperstepEvent;
 import org.apache.flink.runtime.io.network.api.TaskEventHandler;
 import org.apache.flink.runtime.io.network.partition.consumer.InputGate;
+import org.apache.flink.runtime.io.network.rdma.RdmaShuffleServerEndpoint;
 import org.apache.flink.runtime.util.event.EventListener;
 
 import java.io.IOException;
 
 import static org.apache.flink.util.Preconditions.checkState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A basic reader implementation, which wraps an input gate and handles events.
  */
 public abstract class AbstractReader implements ReaderBase {
+	private static final Logger LOG = LoggerFactory.getLogger(AbstractReader.class);
+
 
 	/** The input gate to read from. */
 	protected final InputGate inputGate;
@@ -88,10 +93,13 @@ public abstract class AbstractReader implements ReaderBase {
 			// This event is also checked at the (single) input gate to release the respective
 			// channel, at which it was received.
 			if (eventType == EndOfPartitionEvent.class) {
+				LOG.info("EndOfPartitionEvent received");
 				return true;
 			}
 			else if (eventType == EndOfSuperstepEvent.class) {
-				return incrementEndOfSuperstepEventAndCheck();
+				boolean exit = incrementEndOfSuperstepEventAndCheck();
+				LOG.info("EndOfSuperstepEvent received. Received on all channels? {}",exit);
+				return exit;
 			}
 
 			// ------------------------------------------------------------
@@ -99,7 +107,7 @@ public abstract class AbstractReader implements ReaderBase {
 			// ------------------------------------------------------------
 			else if (event instanceof TaskEvent) {
 				taskEventHandler.publish((TaskEvent) event);
-
+				LOG.info("TaskEvent received.");
 				return false;
 			}
 			else {
