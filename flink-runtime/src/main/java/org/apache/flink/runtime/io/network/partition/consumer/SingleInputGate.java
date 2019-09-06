@@ -479,7 +479,8 @@ public class SingleInputGate implements InputGate {
 	@Override
 	public void requestPartitions() throws IOException, InterruptedException {
 		synchronized (requestLock) {
-			if (!requestedPartitionsFlag) {
+//			if (!requestedPartitionsFlag) { // TODO (venkat): disabled so that client keep on sending the
+			// partition request untill it sees the end of the partition.
 				if (isReleased) {
 					throw new IllegalStateException("Already released.");
 				}
@@ -490,13 +491,17 @@ public class SingleInputGate implements InputGate {
 							"number of total input channels and the currently set number of input " +
 							"channels.");
 				}
-
+			// This is not optimal. The input channels are read in serial fashion.
+			// look at inputChannel.requestSubpartition one message at a time
 				for (InputChannel inputChannel : inputChannels.values()) {
-					inputChannel.requestSubpartition(consumedSubpartitionIndex);
+					if (!inputChannel.isReleased()) { // request partion only on unreleased channel
+						LOG.info("Requesting partition from channel "+inputChannel);
+						inputChannel.requestSubpartition(consumedSubpartitionIndex);
+					}
 				}
-			}
+//			}
 
-			requestedPartitionsFlag = true;
+//			requestedPartitionsFlag = true;
 		}
 	}
 
@@ -523,15 +528,21 @@ public class SingleInputGate implements InputGate {
 			throw new IllegalStateException("Released");
 		}
 
-		requestPartitions();
-
 		InputChannel currentChannel;
 		boolean moreAvailable;
 		Optional<BufferAndAvailability> result = Optional.empty();
 
 		do {
 			synchronized (inputChannelsWithData) {
+				if (inputChannelsWithData.size() == 0){
+					requestPartitions(); // Moved to here, so that request is sent only when all the available input is
+					// consume on the channels. This will ensure, we read super step event on this channel before
+					// sending further data requests.
+				}
 				while (inputChannelsWithData.size() == 0) {
+					requestPartitions(); // Moved to here, so that request is sent only when all the available input is
+					// consume on the channels. This will ensure, we read super step event on this channel before
+					// sending further data requests.
 					if (isReleased) {
 						throw new IllegalStateException("Released");
 					}

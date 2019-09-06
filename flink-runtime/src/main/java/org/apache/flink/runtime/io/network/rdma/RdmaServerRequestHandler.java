@@ -131,12 +131,13 @@ public class RdmaServerRequestHandler implements Runnable {
 							System.out.println("Receive posting failed. reposting new receive request");
 							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 						} else { // first receive succeeded. Read the data and repost the next message
+							LOG.info("Received message from "+getEndpointStr(clientEndpoint));
 							NettyMessage clientRequest = decodeMessageFromBuffer(clientEndpoint.getReceiveBuffer());
 							Class<?> msgClazz = clientRequest.getClass();
 							if (msgClazz == NettyMessage.CloseRequest.class) {
 								clientClose = true;
 
-								LOG.info("closing the connection");
+								LOG.info("closing the endpoint "+getEndpointStr(clientEndpoint));
 //								for (InputChannelID channelID: readers.keySet()){
 //									NetworkSequenceViewReader reader = readers.get(channelID);
 //									reader.notifySubpartitionConsumed();
@@ -146,7 +147,7 @@ public class RdmaServerRequestHandler implements Runnable {
 								// prepare response and post it
 								NettyMessage.PartitionRequest partitionRequest = (NettyMessage.PartitionRequest)
 									clientRequest;
-								LOG.info("received partition request " + partitionRequest.receiverId);
+								LOG.info("received partition request: " + partitionRequest.receiverId + "at endpoint: "+getEndpointStr(clientEndpoint));
 								NetworkSequenceViewReader reader = readers.get(partitionRequest.receiverId);
 								if (reader == null) {
 									reader = new SequenceNumberingViewReader(partitionRequest.receiverId);
@@ -158,6 +159,10 @@ public class RdmaServerRequestHandler implements Runnable {
 								}
 								// TODO(venkat): do something better here, we should not poll reader
 								while (!reader.isRegisteredAsAvailable()) {
+									LOG.info("waiting at the endpoint for data availability: "+getEndpointStr(clientEndpoint) + "reader status:" + reader);
+									synchronized (reader){
+										reader.wait();
+									}
 								}
 
 								NettyMessage response = readPartition(partitionRequest, reader);
@@ -228,6 +233,10 @@ public class RdmaServerRequestHandler implements Runnable {
 		}
 	}
 
+	private String getEndpointStr(RdmaShuffleServerEndpoint clientEndpoint) throws  Exception{
+		return  "src: " + clientEndpoint.getSrcAddr() + " dst: " +
+		clientEndpoint.getDstAddr();
+	}
 	public void stop() {
 		stopped = true;
 	}

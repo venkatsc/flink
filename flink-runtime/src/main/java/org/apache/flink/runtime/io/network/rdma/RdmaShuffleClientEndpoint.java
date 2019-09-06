@@ -110,9 +110,15 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 		NettyMessage response= null;
 		try {
 			ByteBuf buf = msg.write(bufferPool);
+			int takeEventsCount;
+			if (msg instanceof NettyMessage.CloseRequest){
+				takeEventsCount=1; // Don't block for response
+			}else{
+				takeEventsCount=2;
+			}
 			this.getSendBuffer().put(buf.nioBuffer());
 			RdmaSendReceiveUtil.postSendReq(this, ++workRequestId);
-			for (int i=0;i<2;i++) {
+			for (int i=0;i<takeEventsCount;i++) {
 				IbvWC wc = this.getWcEvents().take();
 				LOG.info("Took completion event {} ",i);
 				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {

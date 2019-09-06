@@ -118,9 +118,36 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 		int delayMs) throws IOException {
 
 		checkNotClosed();
-		PartitionReaderClient readerClient = new PartitionReaderClient(partitionId, subpartitionIndex, inputChannel,delayMs,clientEndpoint,clientHandler );
-		Thread clientReaderThread = new Thread(readerClient);
-		clientReaderThread.start();
+		try {
+			LOG.info("posting partition request against "+getEndpointStr(clientEndpoint));
+			final NettyMessage.PartitionRequest request = new NettyMessage.PartitionRequest(
+				partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
+			NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(request);
+			LOG.info("partition request completed on "+ getEndpointStr(clientEndpoint));
+			if (bufferResponseorEvent != null) {
+				Class<?> msgClazz = bufferResponseorEvent.getClass();
+				if (msgClazz == NettyMessage.BufferResponse.class) {
+					LOG.info("got partition response from endpoint: " + getEndpointStr(clientEndpoint));
+					NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) bufferResponseorEvent;
+					try {
+						// TODO (venkat): decode the message
+						clientHandler.decodeMsg(bufferOrEvent, false, clientEndpoint, inputChannel);
+					} catch (Throwable t) {
+						LOG.error("decode failure ", t);
+					}
+				} else {
+					LOG.info("received message type is not handled " + msgClazz.toString());
+				}
+			} else {
+				LOG.error("received partition response is null and it should never be the case");
+			}
+		}catch (Exception e){
+			LOG.error("failed client ",e);
+		}
+
+//		PartitionReaderClient readerClient = new PartitionReaderClient(partitionId, subpartitionIndex, inputChannel,delayMs,clientEndpoint,clientHandler );
+//		Thread clientReaderThread = new Thread(readerClient);
+//		clientReaderThread.start();
 
 		// TODO (venkat): this should be done in seperate thread (see SingleInputGate.java:494)
 		// input channels are iterated over, i.e; future operator has to wait for one by one completion
@@ -183,6 +210,11 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 			final SocketAddress remoteAddr = clientEndpoint.getDstAddr();
 			throw new LocalTransportException(String.format("Channel to '%s' closed.", remoteAddr), localAddr);
 		}
+	}
+
+	private String getEndpointStr(RdmaShuffleClientEndpoint clientEndpoint) throws  Exception{
+		return  "src: " + clientEndpoint.getSrcAddr() + " dst: " +
+			clientEndpoint.getDstAddr();
 	}
 }
 
