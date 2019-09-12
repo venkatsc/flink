@@ -97,11 +97,18 @@ public abstract class InputChannel {
 		this.numBuffersIn = numBuffersIn;
 	}
 
+//	public void setReceivedSuperStepEvent(){
+//		this.receivedSuperStepEvent=true;
+//	}
+
+//	public boolean getReceivedSuperStepEvent(){
+//		return this.receivedSuperStepEvent;
+//	}
 	// ------------------------------------------------------------------------
 	// Properties
 	// ------------------------------------------------------------------------
 
-	int getChannelIndex() {
+	public int getChannelIndex() {
 		return channelIndex;
 	}
 

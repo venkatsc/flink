@@ -72,7 +72,7 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 			endpoint.connect(address, 1000);
 		}catch (Exception e){
 			LOG.error("failed to start the client ",e);
-			throw new IOException("client failed to start");
+			throw new IOException("client failed to start",e);
 		}
 
 		LOG.info("SimpleClient::client channel set up ");

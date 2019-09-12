@@ -132,7 +132,7 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 						switch(ID){
 							case NettyMessage.BufferResponse.ID:
 								response = NettyMessage.BufferResponse.readFrom(Unpooled.wrappedBuffer(this.receiveBuffer));
-								LOG.error(" Response received with seq.number: "+ ((NettyMessage.BufferResponse) response).sequenceNumber);
+//								LOG.error(" Response received with seq.number: "+ ((NettyMessage.BufferResponse) response).sequenceNumber);
 								break;
 							default: LOG.error(" Un-identified request type "+ID);
 						}
@@ -151,9 +151,19 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 				}
 			}
 		} catch (Exception e) {
-			e.printStackTrace();
+			try {
+				LOG.error("failed client read "+getEndpointStr(this), e);
+			} catch (Exception e1) {
+				LOG.error("failed get endpoint", e);
+			}
+//			throw new IOException(e);
 		}
 		return response;
+	}
+
+	private String getEndpointStr(RdmaShuffleClientEndpoint clientEndpoint) throws  Exception{
+		return  "src: " + clientEndpoint.getSrcAddr() + " dst: " +
+			clientEndpoint.getDstAddr();
 	}
 
 	public ByteBuffer getAvailableFreeReceiveBuffers() {

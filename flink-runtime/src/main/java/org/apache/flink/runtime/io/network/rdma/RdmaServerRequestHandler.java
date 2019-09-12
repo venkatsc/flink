@@ -47,6 +47,7 @@ public class RdmaServerRequestHandler implements Runnable {
 		while (!stopped) {
 			try {
 				RdmaShuffleServerEndpoint clientEndpoint = serverEndpoint.accept();
+				RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 				// TODO (venkat): Handle accepted connection, not using thread pool as it is only proto-type with 4
 				// servers
 				// Should be changed to configurable ThreadPool to work with more nodes.
@@ -120,15 +121,13 @@ public class RdmaServerRequestHandler implements Runnable {
 			try {
 				LOG.info("Server accepted connection src " + clientEndpoint.getSrcAddr() + " dst: " + clientEndpoint
 					.getDstAddr());
-
-				RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 				boolean clientClose = false;
 				while (!clientClose) {
 					IbvWC wc = null;
 					wc = clientEndpoint.getWcEvents().take();
 					if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 						if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-							System.out.println("Receive posting failed. reposting new receive request");
+							LOG.error("Receive posting failed. reposting new receive request");
 							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 						} else { // first receive succeeded. Read the data and repost the next message
 							LOG.info("Received message from "+getEndpointStr(clientEndpoint));
@@ -159,7 +158,7 @@ public class RdmaServerRequestHandler implements Runnable {
 								}
 								// TODO(venkat): do something better here, we should not poll reader
 								while (!reader.isRegisteredAsAvailable()) {
-									LOG.info("waiting at the endpoint for data availability: "+getEndpointStr(clientEndpoint) + "reader status:" + reader);
+									LOG.info("waiting for partition"+ partitionRequest.partitionId +" at the endpoint for data availability: "+getEndpointStr(clientEndpoint) + "reader status:" + reader);
 									synchronized (reader){
 										reader.wait();
 									}

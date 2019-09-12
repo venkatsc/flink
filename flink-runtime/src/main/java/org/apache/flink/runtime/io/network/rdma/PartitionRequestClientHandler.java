@@ -33,6 +33,10 @@ import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 
 import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.core.memory.MemorySegmentFactory;
+import org.apache.flink.runtime.event.AbstractEvent;
+import org.apache.flink.runtime.io.network.api.EndOfPartitionEvent;
+import org.apache.flink.runtime.io.network.api.EndOfSuperstepEvent;
+import org.apache.flink.runtime.io.network.api.serialization.EventSerializer;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
 import org.apache.flink.runtime.io.network.buffer.BufferProvider;
 import org.apache.flink.runtime.io.network.buffer.FreeingBufferRecycler;
@@ -208,6 +212,8 @@ class PartitionRequestClientHandler {
 				} while (!readFinished);
 			} else {
 				LOG.info("in event");
+
+
 				// ---- Event -------------------------------------------------
 				// TODO We can just keep the serialized data in the Netty buffer and release it later at the reader
 				byte[] byteArray = new byte[receivedSize];
@@ -215,6 +221,8 @@ class PartitionRequestClientHandler {
 				MemorySegment memSeg = MemorySegmentFactory.wrap(byteArray);
 				Buffer buffer = new NetworkBuffer(memSeg, FreeingBufferRecycler.INSTANCE, false, receivedSize);
 				inputChannel.onBuffer(buffer, bufferOrEvent.sequenceNumber, -1);
+
+				final AbstractEvent event = EventSerializer.fromBuffer(buffer, getClass().getClassLoader());
 			}
 		} finally {
 			if (releaseNettyBuffer) {

@@ -118,36 +118,37 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 		int delayMs) throws IOException {
 
 		checkNotClosed();
-		try {
-			LOG.info("posting partition request against "+getEndpointStr(clientEndpoint));
-			final NettyMessage.PartitionRequest request = new NettyMessage.PartitionRequest(
-				partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
-			NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(request);
-			LOG.info("partition request completed on "+ getEndpointStr(clientEndpoint));
-			if (bufferResponseorEvent != null) {
-				Class<?> msgClazz = bufferResponseorEvent.getClass();
-				if (msgClazz == NettyMessage.BufferResponse.class) {
-					LOG.info("got partition response from endpoint: " + getEndpointStr(clientEndpoint));
-					NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) bufferResponseorEvent;
-					try {
-						// TODO (venkat): decode the message
-						clientHandler.decodeMsg(bufferOrEvent, false, clientEndpoint, inputChannel);
-					} catch (Throwable t) {
-						LOG.error("decode failure ", t);
-					}
-				} else {
-					LOG.info("received message type is not handled " + msgClazz.toString());
-				}
-			} else {
-				LOG.error("received partition response is null and it should never be the case");
-			}
-		}catch (Exception e){
-			LOG.error("failed client ",e);
-		}
+//		try {
+//			LOG.info("posting partition request against "+getEndpointStr(clientEndpoint));
+//			final NettyMessage.PartitionRequest request = new NettyMessage.PartitionRequest(
+//				partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
+//			NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(request);
+//			LOG.info("partition request completed on "+ getEndpointStr(clientEndpoint));
+//			if (bufferResponseorEvent != null) {
+//				Class<?> msgClazz = bufferResponseorEvent.getClass();
+//				if (msgClazz == NettyMessage.BufferResponse.class) {
+//					LOG.info("got partition response from endpoint: " + getEndpointStr(clientEndpoint));
+//					NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) bufferResponseorEvent;
+//					try {
+//						// TODO (venkat): decode the message
+//						clientHandler.decodeMsg(bufferOrEvent, false, clientEndpoint, inputChannel);
+//					} catch (Throwable t) {
+//						LOG.error("decode failure ", t);
+//					}
+//				} else {
+//					LOG.info("received message type is not handled " + msgClazz.toString());
+//				}
+//			} else {
+//				LOG.error("received partition response is null and it should never be the case");
+//			}
+//		}catch (Exception e){
+//			LOG.error("failed client ",e);
+//			throw new IOException(e);
+//		}
 
-//		PartitionReaderClient readerClient = new PartitionReaderClient(partitionId, subpartitionIndex, inputChannel,delayMs,clientEndpoint,clientHandler );
-//		Thread clientReaderThread = new Thread(readerClient);
-//		clientReaderThread.start();
+		PartitionReaderClient readerClient = new PartitionReaderClient(partitionId, subpartitionIndex, inputChannel,delayMs,clientEndpoint,clientHandler );
+		Thread clientReaderThread = new Thread(readerClient);
+		clientReaderThread.start();
 
 		// TODO (venkat): this should be done in seperate thread (see SingleInputGate.java:494)
 		// input channels are iterated over, i.e; future operator has to wait for one by one completion
@@ -172,6 +173,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 	public void sendTaskEvent(ResultPartitionID partitionId, TaskEvent event, final RemoteInputChannel inputChannel)
 		throws IOException {
 		checkNotClosed();
+		LOG.debug("Sending task events");
 
 		NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(new NettyMessage.TaskEventRequest(event,
 			partitionId, inputChannel.getInputChannelId()));
@@ -242,20 +244,19 @@ class PartitionReaderClient implements Runnable {
 
 	@Override
 	public void run() {
-		boolean moreAvailable = false;
+		int i=0;
 		do {
-			LOG.info("sending partition completed. input channel is closed? {}",inputChannel.isReleased());
+			i++;
+			LOG.info("sending partition request {} on {}",i,inputChannel);
 			final NettyMessage.PartitionRequest request = new NettyMessage.PartitionRequest(
 				partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
 			NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(request);
-			LOG.info("partition request completed");
+			LOG.info("partition request completed ",inputChannel);
 			if (bufferResponseorEvent != null) {
 				Class<?> msgClazz = bufferResponseorEvent.getClass();
 				if (msgClazz == NettyMessage.BufferResponse.class) {
-					LOG.info("got partition response");
+					LOG.info("got partition response {}", inputChannel);
 					NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) bufferResponseorEvent;
-					moreAvailable = bufferOrEvent.moreAvailable;
-					LOG.info("more available {}", moreAvailable);
 					try {
 						// TODO (venkat): decode the message
 						clientHandler.decodeMsg(bufferOrEvent, false, clientEndpoint, inputChannel);
@@ -264,18 +265,13 @@ class PartitionReaderClient implements Runnable {
 					}
 				} else {
 					LOG.info("received message type is not handled " + msgClazz.toString());
-					moreAvailable = false;
 				}
 			} else {
 				LOG.error("received partition response is null and it should never be the case");
-				moreAvailable = false;
 			}
-//			if (!moreAvailable){
-//				LOG.info("Done with this client and sending close request");
-//				this.close(inputChannel); // TODO (venkat): do not close it here, endpoint TaskEvents to send.
-//				// see SingleInputGate.java:496
-//			}
-		} while (!inputChannel.isReleased());
+		} while (!inputChannel.isReleased()); // TODO(venkat): we should close the connection on reaching EndOfPartitionEvent
+		// waiting would make the partitionRequest being posted after EndOfPartitionEvent. This would hang server thread
+		// waiting for more data.
 	}
 }
 

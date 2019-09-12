@@ -229,6 +229,7 @@ public class TaskManagerServices {
 		checkTempDirs(taskManagerServicesConfiguration.getTmpDirPaths());
 
 		final NetworkEnvironment network = createNetworkEnvironment(taskManagerServicesConfiguration, maxJvmHeapMemory);
+		// register network memory with RDMA endpoint
 		network.start();
 
 		final TaskManagerLocation taskManagerLocation = new TaskManagerLocation(

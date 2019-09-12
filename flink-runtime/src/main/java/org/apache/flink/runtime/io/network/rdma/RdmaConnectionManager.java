@@ -73,6 +73,7 @@ public class RdmaConnectionManager implements ConnectionManager {
 			}
 			return partitionRequestClient;
 		} catch (Exception e) {
+			LOG.error("Error occurred. Rethrowing it as IOException ",e);
 			throw new IOException(e);
 		}
 	}

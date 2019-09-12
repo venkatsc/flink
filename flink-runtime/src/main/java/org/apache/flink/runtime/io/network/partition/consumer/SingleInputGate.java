@@ -28,6 +28,7 @@ import org.apache.flink.runtime.event.TaskEvent;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.io.network.NetworkEnvironment;
 import org.apache.flink.runtime.io.network.api.EndOfPartitionEvent;
+import org.apache.flink.runtime.io.network.api.EndOfSuperstepEvent;
 import org.apache.flink.runtime.io.network.api.serialization.EventSerializer;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
 import org.apache.flink.runtime.io.network.buffer.BufferPool;
@@ -36,6 +37,9 @@ import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionType;
 import org.apache.flink.runtime.io.network.partition.consumer.InputChannel.BufferAndAvailability;
+import org.apache.flink.runtime.iterative.event.AllWorkersDoneEvent;
+import org.apache.flink.runtime.iterative.event.TerminationEvent;
+import org.apache.flink.runtime.iterative.event.WorkerDoneEvent;
 import org.apache.flink.runtime.jobgraph.DistributionPattern;
 import org.apache.flink.runtime.jobgraph.IntermediateDataSetID;
 import org.apache.flink.runtime.jobgraph.IntermediateResultPartitionID;
@@ -394,7 +398,7 @@ public class SingleInputGate implements InputGate {
 					throw new IllegalStateException("Tried to update unknown channel with unknown channel.");
 				}
 
-				LOG.debug("{}: Updated unknown input channel to {}.", owningTaskName, newChannel);
+				LOG.debug("{}: Updated unknown input channel {} to {}.", owningTaskName, unknownChannel, newChannel);
 
 				inputChannels.put(partitionId, newChannel);
 
@@ -502,30 +506,32 @@ public class SingleInputGate implements InputGate {
 	@Override
 	public void requestPartitions() throws IOException, InterruptedException {
 		synchronized (requestLock) {
-//			if (!requestedPartitionsFlag) { // TODO (venkat): disabled so that client keep on sending the
-			// partition request untill it sees the end of the partition.
-			if (isReleased) {
-				throw new IllegalStateException("Already released.");
-			}
-
-			// Sanity checks
-			if (numberOfInputChannels != inputChannels.size()) {
-				throw new IllegalStateException("Bug in input gate setup logic: mismatch between" +
-					"number of total input channels and the currently set number of input " +
-					"channels.");
-			}
-			// This is not optimal. The input channels are read in serial fashion.
-			// look at inputChannel.requestSubpartition one message at a time
-			for (InputChannel inputChannel : inputChannels.values()) {
-				if (!inputChannel.isReleased()) { // request partion only on unreleased channel
-					LOG.info("Requesting partition from channel " + inputChannel + " partition id: " + inputChannel
-						.getPartitionId() + " for task " + this.owningTaskName);
-					inputChannel.requestSubpartition(consumedSubpartitionIndex);
+//			if (!requestedPartitionsFlag) {
+				// partition request untill it sees the end of the partition.
+				if (isReleased) {
+					throw new IllegalStateException("Already released.");
 				}
-			}
-//			}
 
-//			requestedPartitionsFlag = true;
+				// Sanity checks
+				if (numberOfInputChannels != inputChannels.size()) {
+					throw new IllegalStateException("Bug in input gate setup logic: mismatch between" +
+						"number of total input channels and the currently set number of input " +
+						"channels.");
+				}
+				// This is not optimal. The input channels are read in serial fashion.
+				// look at inputChannel.requestSubpartition one message at a time
+				for (InputChannel inputChannel : inputChannels.values()) {
+					if (!inputChannel.isReleased()){
+						LOG.info("Requesting partition from channel " + inputChannel + " partition id: " + inputChannel
+							.getPartitionId() + " for task " + this.owningTaskName);
+						inputChannel.requestSubpartition(consumedSubpartitionIndex);
+					}
+
+				}
+				// it needs to be set for updated channel (from unknown to remote/local) to resend the request
+				// and subsequently unblock the thread. See updateInputChannel method.
+				requestedPartitionsFlag = true;
+//			}
 		}
 	}
 
@@ -551,17 +557,15 @@ public class SingleInputGate implements InputGate {
 		if (isReleased) {
 			throw new IllegalStateException("Released");
 		}
-
+//		requestPartitions();
 		InputChannel currentChannel;
 		boolean moreAvailable;
 		Optional<BufferAndAvailability> result = Optional.empty();
 
 		do {
 			synchronized (inputChannelsWithData) {
-				if (inputChannelsWithData.size() == 0) {
-					requestPartitions(); // Moved to here, so that request is sent only when all the available input is
-					// consume on the channels. This will ensure, we read super step event on this channel before
-					// sending further data requests.
+				if (inputChannelsWithData.size() ==0){
+					requestPartitions();
 				}
 				while (inputChannelsWithData.size() == 0) {
 					//requestPartitions(); // Moved to here, so that request is sent only when all the available
@@ -592,7 +596,7 @@ public class SingleInputGate implements InputGate {
 		// we re-add it in case it has more data, because in that case no "non-empty" notification
 		// will come for that channel
 		final Buffer buffer = result.get().buffer();
-		LOG.info("Received the buffer, is more available? {} on channel {}", result.get().moreAvailable(),
+		LOG.info("Received the buffer? {}, is more available? {} on channel {}", buffer.isBuffer(),result.get().moreAvailable(),
 			currentChannel);
 		if (result.get().moreAvailable()) {
 			queueChannel(currentChannel);
@@ -616,11 +620,27 @@ public class SingleInputGate implements InputGate {
 					moreAvailable = false;
 					hasReceivedAllEndOfPartitionEvents = true;
 				}
+
 				LOG.debug("End of partition event received. Releasing resources on the channel" + currentChannel);
 				currentChannel.notifySubpartitionConsumed();
 				currentChannel.releaseAllResources();
+			}else if (WorkerDoneEvent.class.equals(event.getClass())){
+				LOG.debug("WorkerDoneEvent on channel {}",currentChannel);
+			}else if (TerminationEvent.class.equals(event.getClass())){
+				LOG.debug("TerminationEvent on channel {}",currentChannel);
+			}else if (AllWorkersDoneEvent.class.equals(event.getClass())) {
+				LOG.debug("AllWorkersDoneEvent on channel {}",currentChannel);
+			}else if (EndOfSuperstepEvent.class.equals(event.getClass())){
+				LOG.debug("EndOfSuperstepEvent on channel {}",currentChannel);
+				currentChannel.setReachedSuperStep();
+				for (InputChannel channel: inputChannels.values()){
+					LOG.debug("input channel {} on the input gate {} reached superstep {}",channel,this,channel.isReachedSuperStep());
+				}
+			}else{
+				LOG.debug("{} on channel {}",event.getClass(),currentChannel);
 			}
-			LOG.debug("No more buffers available on the channel " + currentChannel);
+
+//			LOG.debug("No more buffers available on the channel " + currentChannel);
 			return Optional.of(new BufferOrEvent(event, currentChannel.getChannelIndex(), moreAvailable));
 		}
 	}

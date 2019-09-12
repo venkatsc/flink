@@ -22,7 +22,6 @@ import com.ibm.disni.RdmaActiveEndpoint;
 import com.ibm.disni.verbs.IbvRecvWR;
 import com.ibm.disni.verbs.IbvSendWR;
 import com.ibm.disni.verbs.IbvSge;
-import com.ibm.disni.verbs.IbvWC;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +35,7 @@ public class RdmaSendReceiveUtil {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
-			LOG.info("posting server send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
+//			LOG.info("posting server send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge sendSGE = new IbvSge();
 			sendSGE.setAddr(clientEndpoint.getRegisteredSendMemory().getAddr());
@@ -60,7 +59,7 @@ public class RdmaSendReceiveUtil {
 			clientEndpoint.postSend(sendWRs).execute().free();
 		} else if (endpoint instanceof RdmaShuffleClientEndpoint) {
 			RdmaShuffleClientEndpoint clientEndpoint = (RdmaShuffleClientEndpoint) endpoint;
-			LOG.info("posting client send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
+//			LOG.info("posting client send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge sendSGE = new IbvSge();
 			sendSGE.setAddr(clientEndpoint.getRegisteredSendMemory().getAddr());
@@ -87,7 +86,7 @@ public class RdmaSendReceiveUtil {
 	public static void postReceiveReq(RdmaActiveEndpoint endpoint, int workReqId) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
-			LOG.info("posting server receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
+//			LOG.info("posting server receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge recvSGE = new IbvSge();
@@ -104,7 +103,7 @@ public class RdmaSendReceiveUtil {
 			recvWRs.add(recvWR);
 			endpoint.postRecv(recvWRs).execute().free();
 		} else if (endpoint instanceof RdmaShuffleClientEndpoint) {
-			LOG.info("posting client receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
+//			LOG.info("posting client receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
 			RdmaShuffleClientEndpoint clientEndpoint = (RdmaShuffleClientEndpoint) endpoint;
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge recvSGE = new IbvSge();
