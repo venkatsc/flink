@@ -25,6 +25,7 @@ import org.apache.flink.runtime.io.network.ConnectionID;
 import org.apache.flink.runtime.io.network.ConnectionManager;
 import org.apache.flink.runtime.io.network.PartitionRequestClientIf;
 import org.apache.flink.runtime.io.network.TaskEventDispatcher;
+import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
 
 import java.io.IOException;
@@ -49,14 +50,15 @@ public class NettyConnectionManager implements ConnectionManager {
 	}
 
 	@Override
-	public void start(ResultPartitionProvider partitionProvider, TaskEventDispatcher taskEventDispatcher) throws IOException {
+	public void start(ResultPartitionProvider partitionProvider, TaskEventDispatcher taskEventDispatcher,
+					  NetworkBufferPool bufferPool) throws IOException {
 		NettyProtocol partitionRequestProtocol = new NettyProtocol(
 			partitionProvider,
 			taskEventDispatcher,
 			client.getConfig().isCreditBasedEnabled());
 
-		client.init(partitionRequestProtocol, bufferPool);
-		server.init(partitionRequestProtocol, bufferPool);
+		client.init(partitionRequestProtocol, this.bufferPool);
+		server.init(partitionRequestProtocol, this.bufferPool);
 		LOG.info(" server address local:"+server.getLocalAddress()+" remote:"+server.getRemoteAddress());
 //		LOG.info(" client address local:"+client.getLocalAddress()+" remote:"+client.getRemoteAddress());
 

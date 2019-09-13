@@ -326,7 +326,7 @@ public class NetworkEnvironment {
 		}
 	}
 
-	public void start() throws IOException {
+	public void start(NetworkBufferPool bufferPool) throws IOException {
 		synchronized (lock) {
 			Preconditions.checkState(!isShutdown, "The NetworkEnvironment has already been shut down.");
 
@@ -334,7 +334,7 @@ public class NetworkEnvironment {
 
 			try {
 				LOG.debug("Starting network connection manager");
-				connectionManager.start(resultPartitionManager, taskEventDispatcher);
+				connectionManager.start(resultPartitionManager, taskEventDispatcher,bufferPool);
 			} catch (IOException t) {
 				throw new IOException("Failed to instantiate network connection manager.", t);
 			}

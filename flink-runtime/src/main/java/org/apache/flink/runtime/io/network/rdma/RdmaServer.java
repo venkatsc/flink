@@ -39,6 +39,7 @@ import org.apache.flink.shaded.netty4.io.netty.buffer.Unpooled;
 
 import org.apache.flink.runtime.io.network.NetworkSequenceViewReader;
 import org.apache.flink.runtime.io.network.TaskEventDispatcher;
+import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
 import org.apache.flink.runtime.io.network.netty.NettyConfig;
 import org.apache.flink.runtime.io.network.partition.ProducerFailedException;
@@ -65,6 +66,7 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 	private ResultPartitionProvider partitionProvider;
 	private TaskEventDispatcher taskEventDispatcher;
 	private RdmaServerRequestHandler handler;
+	private NetworkBufferPool networkBufferPool;
 
 	/**
 	 * Creates the Queue pair endpoint and waits for the incoming connections
@@ -75,7 +77,7 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 	 * @throws IOException
 	 */
 	public RdmaShuffleServerEndpoint createEndpoint(RdmaCmId idPriv, boolean serverSide) throws IOException {
-		return new RdmaShuffleServerEndpoint(endpointGroup, idPriv, serverSide, rdmaConfig.getMemorySegmentSize()+100);
+		return new RdmaShuffleServerEndpoint(endpointGroup, idPriv, serverSide, rdmaConfig.getMemorySegmentSize()+100,networkBufferPool);
 	}
 
 	public RdmaServer(NettyConfig rdmaConfig, NettyBufferPool bufferPool) {
@@ -90,6 +92,11 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 	public void setTaskEventDispatcher(TaskEventDispatcher taskEventDispatcher) {
 		this.taskEventDispatcher = taskEventDispatcher;
 	}
+
+	public void setNetworkBufferPool(NetworkBufferPool bufferPool) {
+		this.networkBufferPool = bufferPool;
+	}
+
 
 	public void start() throws IOException {
 		// create a EndpointGroup. The RdmaActiveEndpointGroup contains CQ processing and delivers CQ event to the

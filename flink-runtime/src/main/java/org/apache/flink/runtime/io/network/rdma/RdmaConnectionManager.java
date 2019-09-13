@@ -27,6 +27,7 @@ import org.apache.flink.runtime.io.network.ConnectionID;
 import org.apache.flink.runtime.io.network.ConnectionManager;
 import org.apache.flink.runtime.io.network.PartitionRequestClientIf;
 import org.apache.flink.runtime.io.network.TaskEventDispatcher;
+import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
 import org.apache.flink.runtime.io.network.netty.NettyConfig;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
@@ -38,24 +39,26 @@ public class RdmaConnectionManager implements ConnectionManager {
 
 	private final RdmaClient client;
 
-	private final NettyBufferPool bufferPool = new NettyBufferPool(8); // TODO (venkat): we might want to allocate
+	private final NettyBufferPool nettyBufferPool = new NettyBufferPool(8); // TODO (venkat): we might want to allocate
 	// pool of buffers per
 	// connection
 	private PartitionRequestClientFactory partitionRequestClientFactory;
 
 	public RdmaConnectionManager(NettyConfig rdmaConfig) {
 
-		this.server = new RdmaServer(rdmaConfig,bufferPool);
-		this.client = new RdmaClient(rdmaConfig, new PartitionRequestClientHandler(), bufferPool);
+		this.server = new RdmaServer(rdmaConfig,nettyBufferPool);
+		this.client = new RdmaClient(rdmaConfig, new PartitionRequestClientHandler(), nettyBufferPool);
 //		this.bufferPool = new NettyBufferPool(rdmaConfig.getNumberOfArenas());
 
 	}
 
 	@Override
-	public void start(ResultPartitionProvider partitionProvider, TaskEventDispatcher taskEventDispatcher) throws
+	public void start(ResultPartitionProvider partitionProvider, TaskEventDispatcher taskEventDispatcher,
+					  NetworkBufferPool bufferPool) throws
 		IOException {
 		server.setPartitionProvider(partitionProvider);
 		server.setTaskEventDispatcher(taskEventDispatcher);
+		server.setNetworkBufferPool(bufferPool);
 		server.start();
 //		client.start(); // client just initializes, only starts when the createPartitionRequestClient called used ConnectionId
 		// instead of netty config

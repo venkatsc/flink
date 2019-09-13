@@ -47,15 +47,20 @@ public class SpanningRecordSerializer<T extends IOReadableWritable> implements R
 	/** Intermediate buffer for length serialization. */
 	private final ByteBuffer lengthBuffer;
 
+	/** Intermediate buffer for network header info. Appends empty values and updated at the network code (RDMA)*/
+//	private final ByteBuffer networkHeaderBufferForPartitionData;
+
 	public SpanningRecordSerializer() {
 		serializationBuffer = new DataOutputSerializer(128);
 
 		lengthBuffer = ByteBuffer.allocate(4);
+//		networkHeaderBufferForPartitionData = ByteBuffer.allocate(1+16 + 4 + 4 + 1+1 + 4);
 		lengthBuffer.order(ByteOrder.BIG_ENDIAN);
 
 		// ensure initial state with hasRemaining false (for correct continueWritingWithNextBufferBuilder logic)
 		dataBuffer = serializationBuffer.wrapAsByteBuffer();
 		lengthBuffer.position(4);
+//		networkHeaderBufferForPartitionData.position(31);
 	}
 
 	/**
@@ -92,6 +97,7 @@ public class SpanningRecordSerializer<T extends IOReadableWritable> implements R
 	 */
 	@Override
 	public SerializationResult copyToBufferBuilder(BufferBuilder targetBuffer) {
+//		targetBuffer.append(networkHeaderBufferForPartitionData);
 		targetBuffer.append(lengthBuffer);
 		targetBuffer.append(dataBuffer);
 		targetBuffer.commit();
@@ -100,7 +106,7 @@ public class SpanningRecordSerializer<T extends IOReadableWritable> implements R
 	}
 
 	private SerializationResult getSerializationResult(BufferBuilder targetBuffer) {
-		if (dataBuffer.hasRemaining() || lengthBuffer.hasRemaining()) {
+		if (dataBuffer.hasRemaining() || lengthBuffer.hasRemaining() ) {
 			return SerializationResult.PARTIAL_RECORD_MEMORY_SEGMENT_FULL;
 		}
 		return !targetBuffer.isFull()
@@ -110,6 +116,7 @@ public class SpanningRecordSerializer<T extends IOReadableWritable> implements R
 
 	@Override
 	public void reset() {
+//		networkHeaderBufferForPartitionData.position(0);
 		dataBuffer.position(0);
 		lengthBuffer.position(0);
 	}
@@ -122,6 +129,6 @@ public class SpanningRecordSerializer<T extends IOReadableWritable> implements R
 
 	@Override
 	public boolean hasSerializedData() {
-		return lengthBuffer.hasRemaining() || dataBuffer.hasRemaining();
+		return lengthBuffer.hasRemaining() || dataBuffer.hasRemaining() ;
 	}
 }

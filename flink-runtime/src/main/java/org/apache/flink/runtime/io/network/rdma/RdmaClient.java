@@ -65,11 +65,11 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 	}
 
 	public void start(InetSocketAddress address) throws IOException {
-		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleClientEndpoint>(1000, true, 128, 4, 128);
+		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleClientEndpoint>(1000000000, true, 128, 4, 128);
 		endpointGroup.init(this);
 		endpoint = endpointGroup.createEndpoint();
 		try {
-			endpoint.connect(address, 1000);
+			endpoint.connect(address, 1000000000);
 		}catch (Exception e){
 			LOG.error("failed to start the client ",e);
 			throw new IOException("client failed to start",e);

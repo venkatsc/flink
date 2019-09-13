@@ -44,8 +44,8 @@ public class InputChannelID extends AbstractID {
 	}
 
 	public void writeTo(ByteBuf buf) {
-		buf.writeLong(this.lowerPart);
-		buf.writeLong(this.upperPart);
+		buf.setLong(0,this.lowerPart);
+		buf.setLong(8,this.upperPart);
 	}
 
 	public void writeTo(ByteBuffer buf) {

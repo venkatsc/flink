@@ -117,7 +117,7 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 				takeEventsCount=2;
 			}
 			this.getSendBuffer().put(buf.nioBuffer());
-			RdmaSendReceiveUtil.postSendReq(this, ++workRequestId);
+			RdmaSendReceiveUtil.postSendReqClient(this, ++workRequestId);
 			for (int i=0;i<takeEventsCount;i++) {
 				IbvWC wc = this.getWcEvents().take();
 				LOG.info("Took completion event {} ",i);
@@ -126,23 +126,23 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 						LOG.error("Receive posting failed. reposting new receive request");
 						RdmaSendReceiveUtil.postReceiveReq(this, ++workRequestId);
 					} else { // first receive succeeded. Read the data and repost the next message
-						this.getReceiveBuffer().getInt(); // discard frame length
-						this.getReceiveBuffer().getInt(); // discard magic number
-						byte ID =this.getReceiveBuffer().get();
-						switch(ID){
-							case NettyMessage.BufferResponse.ID:
-								response = NettyMessage.BufferResponse.readFrom(Unpooled.wrappedBuffer(this.receiveBuffer));
+//						this.getReceiveBuffer().getInt(); // discard frame length
+//						this.getReceiveBuffer().getInt(); // discard magic number
+//						byte ID =this.getReceiveBuffer().get();
+//						switch(ID){
+//							case NettyMessage.BufferResponse.ID:
+						response = NettyMessage.BufferResponse.readFrom(Unpooled.wrappedBuffer(this.receiveBuffer));
 //								LOG.error(" Response received with seq.number: "+ ((NettyMessage.BufferResponse) response).sequenceNumber);
-								break;
-							default: LOG.error(" Un-identified request type "+ID);
-						}
+//								break;
+//							default: LOG.error(" Un-identified request type "+ID);
+//						}
 						this.getReceiveBuffer().clear();
 						RdmaSendReceiveUtil.postReceiveReq(this, ++workRequestId);
 					}
 				} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 						LOG.error("Send failed. reposting new send request request");
-						RdmaSendReceiveUtil.postSendReq(this, ++workRequestId);
+						RdmaSendReceiveUtil.postSendReqClient(this, ++workRequestId);
 					}
 					this.getSendBuffer().clear();
 					// Send succeed does not require any action

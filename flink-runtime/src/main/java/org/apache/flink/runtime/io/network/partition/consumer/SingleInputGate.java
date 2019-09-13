@@ -632,10 +632,10 @@ public class SingleInputGate implements InputGate {
 				LOG.debug("AllWorkersDoneEvent on channel {}",currentChannel);
 			}else if (EndOfSuperstepEvent.class.equals(event.getClass())){
 				LOG.debug("EndOfSuperstepEvent on channel {}",currentChannel);
-				currentChannel.setReachedSuperStep();
-				for (InputChannel channel: inputChannels.values()){
-					LOG.debug("input channel {} on the input gate {} reached superstep {}",channel,this,channel.isReachedSuperStep());
-				}
+//				currentChannel.setReachedSuperStep();
+//				for (InputChannel channel: inputChannels.values()){
+//					LOG.debug("input channel {} on the input gate {} reached superstep {}",channel,this,channel.isReachedSuperStep());
+//				}
 			}else{
 				LOG.debug("{} on channel {}",event.getClass(),currentChannel);
 			}

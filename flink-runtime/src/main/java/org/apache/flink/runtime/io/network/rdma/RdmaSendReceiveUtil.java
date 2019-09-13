@@ -31,16 +31,16 @@ import java.util.LinkedList;
 public class RdmaSendReceiveUtil {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaSendReceiveUtil.class);
 
-	public static void postSendReq(RdmaActiveEndpoint endpoint, int workReqId) throws IOException {
+	public static void postSendReqServer(RdmaActiveEndpoint endpoint, long workReqId,long address) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
 //			LOG.info("posting server send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge sendSGE = new IbvSge();
-			sendSGE.setAddr(clientEndpoint.getRegisteredSendMemory().getAddr());
-			sendSGE.setLength(clientEndpoint.getRegisteredSendMemory().getLength());
-			sendSGE.setLkey(clientEndpoint.getRegisteredSendMemory().getLkey());
+			sendSGE.setAddr(clientEndpoint.getRegisteredSendMemoryByAddress(address).getAddr());
+			sendSGE.setLength(clientEndpoint.getRegisteredSendMemoryByAddress(address).getLength());
+			sendSGE.setLkey(clientEndpoint.getRegisteredSendMemoryByAddress(address).getLkey());
 			sges.add(sendSGE);
 
 			// Create send Work Request (WR)
@@ -57,7 +57,10 @@ public class RdmaSendReceiveUtil {
 			LinkedList<IbvSendWR> sendWRs = new LinkedList<>();
 			sendWRs.add(sendWR);
 			clientEndpoint.postSend(sendWRs).execute().free();
-		} else if (endpoint instanceof RdmaShuffleClientEndpoint) {
+		}
+	}
+	public static void postSendReqClient(RdmaActiveEndpoint endpoint, long workReqId)throws IOException{
+		if (endpoint instanceof RdmaShuffleClientEndpoint) {
 			RdmaShuffleClientEndpoint clientEndpoint = (RdmaShuffleClientEndpoint) endpoint;
 //			LOG.info("posting client send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
@@ -83,7 +86,7 @@ public class RdmaSendReceiveUtil {
 		}
 	}
 
-	public static void postReceiveReq(RdmaActiveEndpoint endpoint, int workReqId) throws IOException {
+	public static void postReceiveReq(RdmaActiveEndpoint endpoint, long workReqId) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 //			LOG.info("posting server receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());

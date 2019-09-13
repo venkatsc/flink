@@ -59,6 +59,8 @@ public class NetworkBufferPool implements BufferPoolFactory {
 
 	private final ArrayBlockingQueue<MemorySegment> availableMemorySegments;
 
+	private final ArrayList<MemorySegment> allSegments= new ArrayList<>();
+
 	private volatile boolean isDestroyed;
 
 	// ---- Managed buffer pools ----------------------------------------------
@@ -91,6 +93,7 @@ public class NetworkBufferPool implements BufferPoolFactory {
 			for (int i = 0; i < numberOfSegmentsToAllocate; i++) {
 				availableMemorySegments.add(MemorySegmentFactory.allocateUnpooledOffHeapMemory(segmentSize, null));
 			}
+			allSegments.addAll(availableMemorySegments);
 		}
 		catch (OutOfMemoryError err) {
 			int allocated = availableMemorySegments.size();
@@ -117,6 +120,11 @@ public class NetworkBufferPool implements BufferPoolFactory {
 	@Nullable
 	public MemorySegment requestMemorySegment() {
 		return availableMemorySegments.poll();
+	}
+
+	/**SHOULD NOT be used except for RDMA memory registration**/
+	public ArrayList<MemorySegment> getAllMemorySegments() {
+		return allSegments;
 	}
 
 	public void recycle(MemorySegment segment) {

@@ -230,7 +230,7 @@ public class TaskManagerServices {
 
 		final NetworkEnvironment network = createNetworkEnvironment(taskManagerServicesConfiguration, maxJvmHeapMemory);
 		// register network memory with RDMA endpoint
-		network.start();
+		network.start(network.getNetworkBufferPool());
 
 		final TaskManagerLocation taskManagerLocation = new TaskManagerLocation(
 			resourceID,

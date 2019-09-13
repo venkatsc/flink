@@ -61,7 +61,7 @@ public class NettyConnectionManagerTest {
 
 		connectionManager.start(
 				mock(ResultPartitionProvider.class),
-				mock(TaskEventDispatcher.class));
+				mock(TaskEventDispatcher.class), null);
 
 		assertEquals(numberOfSlots, connectionManager.getBufferPool().getNumberOfArenas());
 
@@ -129,7 +129,7 @@ public class NettyConnectionManagerTest {
 
 		connectionManager.start(
 				mock(ResultPartitionProvider.class),
-				mock(TaskEventDispatcher.class));
+				mock(TaskEventDispatcher.class), null);
 
 		assertEquals(numberOfArenas, connectionManager.getBufferPool().getNumberOfArenas());
 

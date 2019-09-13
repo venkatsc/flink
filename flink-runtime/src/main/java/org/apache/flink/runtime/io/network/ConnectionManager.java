@@ -18,6 +18,7 @@
 
 package org.apache.flink.runtime.io.network;
 
+import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
 
 import java.io.IOException;
@@ -29,7 +30,7 @@ import java.io.IOException;
 public interface ConnectionManager {
 
 	void start(ResultPartitionProvider partitionProvider,
-				TaskEventDispatcher taskEventDispatcher) throws IOException;
+			   TaskEventDispatcher taskEventDispatcher, NetworkBufferPool bufferPool) throws IOException;
 
 //	/**
 //	 * Creates a {@link PartitionRequestClient} instance for the given {@link ConnectionID}.
