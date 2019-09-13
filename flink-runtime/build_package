@@ -1,5 +1,5 @@
 #!/bin/bash
-mvn clean package  -Dcheckstyle.skip  -DskipTests -Dfast
+mvn clean package  -Dcheckstyle.skip  -Dmaven.test.skip   -DskipTests -Dfast
 
 if [ $? -eq 0 ];then
   (cd .. && ./build_flink_dist)
