@@ -101,9 +101,11 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 	}
 
 	public ArrayBlockingQueue<IbvWC> getWcEvents() {
-		synchronized (this) {
 			return wcEvents;
-		}
+	}
+
+	public NettyBufferPool getNettyBufferpool(){
+		return bufferPool;
 	}
 
 	public NettyMessage writeAndRead(NettyMessage msg){
@@ -152,7 +154,7 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 			}
 		} catch (Exception e) {
 			try {
-				LOG.error("failed client read "+getEndpointStr(this), e);
+				LOG.error("failed client read "+getEndpointStr(), e);
 			} catch (Exception e1) {
 				LOG.error("failed get endpoint", e);
 			}
@@ -161,9 +163,14 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 		return response;
 	}
 
-	private String getEndpointStr(RdmaShuffleClientEndpoint clientEndpoint) throws  Exception{
-		return  "src: " + clientEndpoint.getSrcAddr() + " dst: " +
-			clientEndpoint.getDstAddr();
+	public String getEndpointStr() {
+		try {
+			return "src: " + this.getSrcAddr() + " dst: " +
+				this.getDstAddr();
+		}catch (Exception e){
+			LOG.error("Failed to get the address on client endpoint");
+		}
+		return "";
 	}
 
 	public ByteBuffer getAvailableFreeReceiveBuffers() {

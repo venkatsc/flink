@@ -44,6 +44,7 @@ import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel;
 import org.apache.flink.runtime.util.AtomicDisposableReferenceCounter;
 
+import com.ibm.disni.verbs.IbvWC;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,6 +53,8 @@ import java.net.SocketAddress;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
+import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
+import org.apache.flink.shaded.netty4.io.netty.buffer.Unpooled;
 import org.apache.flink.shaded.netty4.io.netty.channel.ChannelFuture;
 
 /**
@@ -146,7 +149,8 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 //			throw new IOException(e);
 //		}
 
-		PartitionReaderClient readerClient = new PartitionReaderClient(partitionId, subpartitionIndex, inputChannel,delayMs,clientEndpoint,clientHandler );
+		PartitionReaderClient readerClient = new PartitionReaderClient(partitionId, subpartitionIndex, inputChannel,
+			delayMs, clientEndpoint, clientHandler);
 		Thread clientReaderThread = new Thread(readerClient);
 		clientReaderThread.start();
 
@@ -174,12 +178,12 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 		throws IOException {
 		checkNotClosed();
 		LOG.debug("Sending task events");
-
+        boolean[] finished= new boolean[1];
 		NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(new NettyMessage.TaskEventRequest(event,
 			partitionId, inputChannel.getInputChannelId()));
 
 		try {
-			clientHandler.decodeMsg(bufferResponseorEvent, false, clientEndpoint, inputChannel);
+			clientHandler.decodeMsg(bufferResponseorEvent, false, clientEndpoint, inputChannel,finished);
 		} catch (Throwable t) {
 			LOG.error("decode failure ", t);
 		}
@@ -194,10 +198,11 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 			// Close the TCP connection. Send a close request msg to ensure
 			// that outstanding backwards task events are not discarded.
 			//			tcpChannel.writeAndFlush(new NettyMessage.CloseRequest());
-			try{
-			 clientEndpoint.writeAndRead(new NettyMessage.CloseRequest()); // TODO(venkat): need clean way to write close request
-			}catch (Exception e){
-				LOG.error("Failed sending close request ",e);
+			try {
+				clientEndpoint.writeAndRead(new NettyMessage.CloseRequest()); // TODO(venkat): need clean way to write
+				// close request
+			} catch (Exception e) {
+				LOG.error("Failed sending close request ", e);
 			}
 			// Make sure to remove the client from the factory
 			clientFactory.destroyPartitionRequestClient(connectionId, this);
@@ -214,8 +219,8 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 		}
 	}
 
-	private String getEndpointStr(RdmaShuffleClientEndpoint clientEndpoint) throws  Exception{
-		return  "src: " + clientEndpoint.getSrcAddr() + " dst: " +
+	private String getEndpointStr(RdmaShuffleClientEndpoint clientEndpoint) throws Exception {
+		return "src: " + clientEndpoint.getSrcAddr() + " dst: " +
 			clientEndpoint.getDstAddr();
 	}
 }
@@ -244,33 +249,89 @@ class PartitionReaderClient implements Runnable {
 
 	@Override
 	public void run() {
-		int i=0;
+		int i = 0, workRequestId = 0;
+		boolean[] finished = new boolean[1];
+		final NettyMessage.PartitionRequest msg = new NettyMessage.PartitionRequest(
+			partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
+		ByteBuf buf;
+		try {
+			buf = msg.write(clientEndpoint.getNettyBufferpool());
+			clientEndpoint.getSendBuffer().put(buf.nioBuffer());
+			RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+		} catch (IOException ioe) {
+			LOG.error("Failed to serialize partion request");
+			return;
+		}
 		do {
-			i++;
-			LOG.info("sending partition request {} on {}",i,inputChannel);
-			final NettyMessage.PartitionRequest request = new NettyMessage.PartitionRequest(
-				partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
-			NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(request);
-			LOG.info("partition request completed ",inputChannel);
-			if (bufferResponseorEvent != null) {
-				Class<?> msgClazz = bufferResponseorEvent.getClass();
-				if (msgClazz == NettyMessage.BufferResponse.class) {
-					LOG.info("got partition response {}", inputChannel);
-					NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) bufferResponseorEvent;
-					try {
-						// TODO (venkat): decode the message
-						clientHandler.decodeMsg(bufferOrEvent, false, clientEndpoint, inputChannel);
-					} catch (Throwable t) {
-						LOG.error("decode failure ", t);
+			try {
+//			for (int i=0;i<takeEventsCount;i++) {
+				IbvWC wc = clientEndpoint.getWcEvents().take();
+				LOG.info("Took completion event {} ", i);
+				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
+					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
+						LOG.error("Receive posting failed. reposting new receive request");
+						RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
+					} else { // first receive succeeded. Read the data and repost the next message
+						clientEndpoint.getReceiveBuffer().getInt(); // discard frame length
+						clientEndpoint.getReceiveBuffer().getInt(); // discard magic number
+						byte ID = clientEndpoint.getReceiveBuffer().get();
+						switch (ID) {
+							case NettyMessage.BufferResponse.ID:
+								clientHandler.decodeMsg(NettyMessage.BufferResponse.readFrom(Unpooled.wrappedBuffer
+									(clientEndpoint.getReceiveBuffer())), false, clientEndpoint, inputChannel,finished);
+								break;
+							default:
+								LOG.error(" Un-identified request type " + ID);
+						}
+						clientEndpoint.getReceiveBuffer().clear();
+						RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
+						//Post next request
+						clientEndpoint.getSendBuffer().put(buf.nioBuffer());
+						RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
 					}
+				} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
+					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
+						LOG.error("Send failed. reposting new send request request");
+						RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+					}
+					clientEndpoint.getSendBuffer().clear();
+					// Send succeed does not require any action
 				} else {
-					LOG.info("received message type is not handled " + msgClazz.toString());
+					LOG.error("failed to match any condition " + wc.getOpcode());
 				}
-			} else {
-				LOG.error("received partition response is null and it should never be the case");
+//			}
+			} catch (Throwable e) {
+				try {
+					LOG.error("failed client read " + clientEndpoint.getEndpointStr(), e);
+				} catch (Exception e1) {
+					LOG.error("failed get endpoint", e);
+				}
+//			throw new IOException(e);
 			}
-		} while (!inputChannel.isReleased()); // TODO(venkat): we should close the connection on reaching EndOfPartitionEvent
-		// waiting would make the partitionRequest being posted after EndOfPartitionEvent. This would hang server thread
+//			NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(request);
+//			LOG.info("partition request completed ",inputChannel);
+//			if (bufferResponseorEvent != null) {
+//				Class<?> msgClazz = bufferResponseorEvent.getClass();
+//				if (msgClazz == NettyMessage.BufferResponse.class) {
+//					LOG.info("got partition response {}", inputChannel);
+//					NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) bufferResponseorEvent;
+//					try {
+//						// TODO (venkat): decode the message
+//						clientHandler.decodeMsg(bufferOrEvent, false, clientEndpoint, inputChannel);
+//					} catch (Throwable t) {
+//						LOG.error("decode failure ", t);
+//					}
+//				} else {
+//					LOG.info("received message type is not handled " + msgClazz.toString());
+//				}
+//			} else {
+//				LOG.error("received partition response is null and it should never be the case");
+//			}
+		}
+		while (!inputChannel.isReleased()&& !finished[0]); // TODO(venkat): we should close the connection on reaching
+		// EndOfPartitionEvent
+		// waiting would make the partitionRequest being posted after EndOfPartitionEvent. This would hang server
+		// thread
 		// waiting for more data.
 	}
 }

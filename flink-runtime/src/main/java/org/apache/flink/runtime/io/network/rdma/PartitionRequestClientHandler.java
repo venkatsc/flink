@@ -122,7 +122,7 @@ class PartitionRequestClientHandler {
 
 	// ------------------------------------------------------------------------
 	public void decodeMsg(Object msg, boolean isStagedBuffer, RdmaShuffleClientEndpoint clientEndpoint,
-						  RemoteInputChannel inputChannel) throws
+						  RemoteInputChannel inputChannel,boolean[] finished) throws
 		Throwable {
 		final Class<?> msgClazz = msg.getClass();
 
@@ -138,7 +138,7 @@ class PartitionRequestClientHandler {
 
 			}
 
-			decodeBufferOrEvent(inputChannel, bufferOrEvent, isStagedBuffer, clientEndpoint);
+			decodeBufferOrEvent(inputChannel, bufferOrEvent, isStagedBuffer, clientEndpoint,finished);
 		}
 		// ---- Error ---------------------------------------------------------
 		else if (msgClazz == NettyMessage.ErrorResponse.class) {
@@ -171,7 +171,7 @@ class PartitionRequestClientHandler {
 	}
 
 	private void decodeBufferOrEvent(RemoteInputChannel inputChannel, NettyMessage.BufferResponse bufferOrEvent,
-										boolean isStagedBuffer, RdmaShuffleClientEndpoint clientEndpoint) throws
+										boolean isStagedBuffer, RdmaShuffleClientEndpoint clientEndpoint,boolean[] finished) throws
 		Throwable {
 		boolean releaseNettyBuffer = true;
 
@@ -223,6 +223,9 @@ class PartitionRequestClientHandler {
 				inputChannel.onBuffer(buffer, bufferOrEvent.sequenceNumber, -1);
 
 				final AbstractEvent event = EventSerializer.fromBuffer(buffer, getClass().getClassLoader());
+				if (event.getClass()==EndOfPartitionEvent.class){
+					finished[0]=true;
+				}
 			}
 		} finally {
 			if (releaseNettyBuffer) {

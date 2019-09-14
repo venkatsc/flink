@@ -20,19 +20,14 @@ package org.apache.flink.runtime.io.network.rdma;
 
 import com.ibm.disni.RdmaActiveEndpointGroup;
 import com.ibm.disni.RdmaEndpointFactory;
-import com.ibm.disni.verbs.IbvWC;
 import com.ibm.disni.verbs.RdmaCmId;
-import org.apache.commons.cli.ParseException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 
-import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 
 import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
 import org.apache.flink.runtime.io.network.netty.NettyConfig;
@@ -56,6 +51,7 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 		this.clientHandler = clientHandler;
 		this.bufferPool = bufferPool;
 	}
+
 
 	public RdmaShuffleClientEndpoint createEndpoint(RdmaCmId idPriv, boolean serverSide) throws IOException {
 		// we have passed our own endpoint factory to the group, therefore new endpoints will be of type

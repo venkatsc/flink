@@ -506,7 +506,7 @@ public class SingleInputGate implements InputGate {
 	@Override
 	public void requestPartitions() throws IOException, InterruptedException {
 		synchronized (requestLock) {
-//			if (!requestedPartitionsFlag) {
+			if (!requestedPartitionsFlag) {
 				// partition request untill it sees the end of the partition.
 				if (isReleased) {
 					throw new IllegalStateException("Already released.");
@@ -531,7 +531,7 @@ public class SingleInputGate implements InputGate {
 				// it needs to be set for updated channel (from unknown to remote/local) to resend the request
 				// and subsequently unblock the thread. See updateInputChannel method.
 				requestedPartitionsFlag = true;
-//			}
+			}
 		}
 	}
 
@@ -557,16 +557,13 @@ public class SingleInputGate implements InputGate {
 		if (isReleased) {
 			throw new IllegalStateException("Released");
 		}
-//		requestPartitions();
+		requestPartitions();
 		InputChannel currentChannel;
 		boolean moreAvailable;
 		Optional<BufferAndAvailability> result = Optional.empty();
 
 		do {
 			synchronized (inputChannelsWithData) {
-				if (inputChannelsWithData.size() ==0){
-					requestPartitions();
-				}
 				while (inputChannelsWithData.size() == 0) {
 					//requestPartitions(); // Moved to here, so that request is sent only when all the available
 					// input is
@@ -577,7 +574,7 @@ public class SingleInputGate implements InputGate {
 					}
 
 					if (blocking) {
-						LOG.info("Blocking inputgate");
+//						LOG.info("Blocking inputgate");
 						inputChannelsWithData.wait();
 					} else {
 						return Optional.empty();
@@ -596,8 +593,8 @@ public class SingleInputGate implements InputGate {
 		// we re-add it in case it has more data, because in that case no "non-empty" notification
 		// will come for that channel
 		final Buffer buffer = result.get().buffer();
-		LOG.info("Received the buffer? {}, is more available? {} on channel {}", buffer.isBuffer(),result.get().moreAvailable(),
-			currentChannel);
+		LOG.debug("Received the buffer? {}, is more available? {} on channel {}", buffer.isBuffer(),result.get().moreAvailable(),
+		currentChannel);
 		if (result.get().moreAvailable()) {
 			queueChannel(currentChannel);
 			moreAvailable = true;
@@ -632,10 +629,10 @@ public class SingleInputGate implements InputGate {
 				LOG.debug("AllWorkersDoneEvent on channel {}",currentChannel);
 			}else if (EndOfSuperstepEvent.class.equals(event.getClass())){
 				LOG.debug("EndOfSuperstepEvent on channel {}",currentChannel);
-				currentChannel.setReachedSuperStep();
-				for (InputChannel channel: inputChannels.values()){
-					LOG.debug("input channel {} on the input gate {} reached superstep {}",channel,this,channel.isReachedSuperStep());
-				}
+//				currentChannel.setReachedSuperStep();
+//				for (InputChannel channel: inputChannels.values()){
+//					LOG.debug("input channel {} on the input gate {} reached superstep {}",channel,this,channel.isReachedSuperStep());
+//				}
 			}else{
 				LOG.debug("{} on channel {}",event.getClass(),currentChannel);
 			}
@@ -692,7 +689,7 @@ public class SingleInputGate implements InputGate {
 			enqueuedInputChannelsWithData.set(channel.getChannelIndex());
 
 			if (availableChannels == 0) {
-				LOG.info("Releasing inputgate on buffer");
+//				LOG.info("Releasing inputgate on buffer");
 				inputChannelsWithData.notifyAll();
 			}
 		}

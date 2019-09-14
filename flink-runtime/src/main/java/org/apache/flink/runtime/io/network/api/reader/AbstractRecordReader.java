@@ -103,7 +103,7 @@ abstract class AbstractRecordReader<T extends IOReadableWritable> extends Abstra
 							+ "If you are using custom serialization code (Writable or Value types), check their "
 							+ "serialization routines. In the case of Kryo, check the respective Kryo serializer.");
 				}
-				LOG.info("Received event");
+//				LOG.info("Received event");
 				if (handleEvent(bufferOrEvent.getEvent())) {
 					if (inputGate.isFinished()) {
 						isFinished = true;
