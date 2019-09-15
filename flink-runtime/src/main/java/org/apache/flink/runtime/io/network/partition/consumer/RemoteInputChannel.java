@@ -49,12 +49,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 import static org.apache.flink.util.Preconditions.checkState;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * An input channel, which requests a remote partition queue.
  */
 public class RemoteInputChannel extends InputChannel implements BufferRecycler, BufferListener {
-
+	private static final Logger LOG = LoggerFactory.getLogger(RemoteInputChannel.class);
 	/** ID to distinguish this channel from other channels sharing the same TCP connection. */
 	private final InputChannelID id = new InputChannelID();
 
@@ -511,17 +513,24 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 					return;
 				}
 
+//				if (expectedSequenceNumber==sequenceNumber+1){
+//					// For some weird reason Disni is reading some requests twice
+//					// For example, if we are expecting 47 and got 46, it is most likely already seen
+//					// because we reach to 47 only upon seeing 46!
+//					LOG.info("Ignore this buffer, it is being read twice!! expectedSequenceNumber {} given {}",expectedSequenceNumber,sequenceNumber);
+//					return;
+//				}
+
 				if (expectedSequenceNumber != sequenceNumber) {
-					onError(new BufferReorderingException(expectedSequenceNumber, sequenceNumber));
+					onError(new BufferReorderingException(expectedSequenceNumber, sequenceNumber,this));
 					return;
 				}
 
 				wasEmpty = receivedBuffers.isEmpty();
 				receivedBuffers.add(buffer);
 				recycleBuffer = false;
+				++expectedSequenceNumber;
 			}
-
-			++expectedSequenceNumber;
 
 			if (wasEmpty) {
 				notifyChannelNonEmpty();
@@ -546,7 +555,7 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 					expectedSequenceNumber++;
 					success = true;
 				} else {
-					onError(new BufferReorderingException(expectedSequenceNumber, sequenceNumber));
+					onError(new BufferReorderingException(expectedSequenceNumber, sequenceNumber,this));
 				}
 			}
 		}
@@ -571,16 +580,18 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 		private final int expectedSequenceNumber;
 
 		private final int actualSequenceNumber;
+		private final RemoteInputChannel channel;
 
-		BufferReorderingException(int expectedSequenceNumber, int actualSequenceNumber) {
+		BufferReorderingException(int expectedSequenceNumber, int actualSequenceNumber,RemoteInputChannel channel) {
 			this.expectedSequenceNumber = expectedSequenceNumber;
 			this.actualSequenceNumber = actualSequenceNumber;
+			this.channel = channel;
 		}
 
 		@Override
 		public String getMessage() {
-			return String.format("Buffer re-ordering: expected buffer with sequence number %d, but received %d.",
-				expectedSequenceNumber, actualSequenceNumber);
+			return String.format("Buffer re-ordering: expected buffer with sequence number %d, but received %d on channel %s",
+				expectedSequenceNumber, actualSequenceNumber,channel.toString());
 		}
 	}
 

@@ -80,8 +80,8 @@ public class RdmaServerRequestHandler implements Runnable {
 				if (!reader.isReleased()) {
 					continue;
 				}
-				LOG.info("Sending error message");
 				Throwable cause = reader.getFailureCause();
+				LOG.info("Sending error message ",cause);
 				if (cause != null) {
 					NettyMessage.ErrorResponse msg = new NettyMessage.ErrorResponse(
 						new ProducerFailedException(cause),
@@ -165,8 +165,14 @@ public class RdmaServerRequestHandler implements Runnable {
 								}
 
 								NettyMessage response = readPartition(partitionRequest, reader);
-								LOG.error(" Sending partition with seq. number: " + ((NettyMessage.BufferResponse)
-									response).sequenceNumber);
+							if (response instanceof NettyMessage.BufferResponse) {
+								NettyMessage.BufferResponse tmpResp = (NettyMessage.BufferResponse)
+									response;
+								LOG.error(" Sending partition with seq. number: " + tmpResp.sequenceNumber + " receiver Id " + tmpResp.receiverId);
+
+							}else{
+								LOG.info("skip: sending error message");
+							}
 								clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
 								clientEndpoint.getReceiveBuffer().clear();
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
@@ -212,8 +218,8 @@ public class RdmaServerRequestHandler implements Runnable {
 						}
 					} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
 						if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-							System.out.println("Send failed. reposting new send request request");
-							RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+							LOG.error("Server:Send failed. reposting new send request request"+getEndpointStr(clientEndpoint));
+//							RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
 						}
 						// send completed, so clear the buffer
 						clientEndpoint.getSendBuffer().clear();

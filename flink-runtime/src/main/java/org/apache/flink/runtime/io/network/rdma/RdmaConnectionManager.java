@@ -35,8 +35,9 @@ public class RdmaConnectionManager implements ConnectionManager {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaConnectionManager.class);
 
 	private final RdmaServer server;
+	private final NettyConfig rdmaConfig;
 
-	private final RdmaClient client;
+//	private final RdmaClient client;
 
 	private final NettyBufferPool bufferPool = new NettyBufferPool(8); // TODO (venkat): we might want to allocate
 	// pool of buffers per
@@ -46,7 +47,8 @@ public class RdmaConnectionManager implements ConnectionManager {
 	public RdmaConnectionManager(NettyConfig rdmaConfig) {
 
 		this.server = new RdmaServer(rdmaConfig,bufferPool);
-		this.client = new RdmaClient(rdmaConfig, new PartitionRequestClientHandler(), bufferPool);
+		this.rdmaConfig=rdmaConfig;
+//		this.client = new RdmaClient(rdmaConfig, new PartitionRequestClientHandler(), bufferPool);
 //		this.bufferPool = new NettyBufferPool(rdmaConfig.getNumberOfArenas());
 
 	}
@@ -59,7 +61,7 @@ public class RdmaConnectionManager implements ConnectionManager {
 		server.start();
 //		client.start(); // client just initializes, only starts when the createPartitionRequestClient called used ConnectionId
 		// instead of netty config
-		this.partitionRequestClientFactory = new PartitionRequestClientFactory(client);
+		this.partitionRequestClientFactory = new PartitionRequestClientFactory(new PartitionRequestClientHandler(), bufferPool,rdmaConfig);
 	}
 
 	@Override
@@ -95,7 +97,7 @@ public class RdmaConnectionManager implements ConnectionManager {
 
 	@Override
 	public void shutdown() throws IOException {
-		client.stop();
+//		client.stop();
 		server.stop();
 	}
 }

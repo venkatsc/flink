@@ -47,6 +47,18 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 	private ByteBuffer receiveBuffer; // Todo: add buffer manager with multiple buffers
 	private IbvMr registeredReceiveMemory;
 
+	private LastEvent lastEvent = new LastEvent();
+
+	private class LastEvent {
+		private IbvWC lastEvent;
+		public IbvWC get(){
+			return lastEvent;
+		}
+
+		public void set(IbvWC wc){
+			lastEvent=wc;
+		}
+	}
 
 	private ArrayBlockingQueue<IbvWC> wcEvents = new ArrayBlockingQueue<>(1000);
 
@@ -58,13 +70,25 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 
 	@Override
 	public void dispatchCqEvent(IbvWC wc) throws IOException {
-		synchronized (this) {
+			System.out.println("Server got event " + wc.getWr_id() + " : " + IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) +
+				"Old " + lastEvent.get() + "\n\n");
+			int newOpCode = wc.getOpcode();
+			IbvWC old = lastEvent.get();
+			if(old == null){
+				lastEvent.set(wc.clone());
+				System.out.println(" Last event1 = " + lastEvent.get());
+			} else if (old.getOpcode() == newOpCode){
+				System.out.println( "Last event: " + old  + "current :" + wc);
+				throw new RuntimeException("*******server got "+ IbvWC.IbvWcOpcode.valueOf(newOpCode) +" event twice in a row. last id = "+old.getWr_id()+", current id "+old.getWr_id()+"***********");
+			}
+			lastEvent.set(wc.clone());
+			System.out.println("Last event1 = " + lastEvent.get());
 			wcEvents.add(wc);
-		}
 	}
 
 	public void init() throws IOException {
 		super.init();
+		LOG.info("Allocating server rdma buffers");
 		this.sendBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
 		this.receiveBuffer = ByteBuffer.allocateDirect(bufferSize);
 		this.registeredReceiveMemory = registerMemory(receiveBuffer).execute().getMr();

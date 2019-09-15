@@ -54,6 +54,19 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 	private static int workRequestId;
 	private NettyBufferPool bufferPool;
 
+	private LastEvent lastEvent = new LastEvent();
+
+	private class LastEvent {
+		private IbvWC lastEvent;
+		public IbvWC get(){
+			return lastEvent;
+		}
+
+		public void set(IbvWC wc){
+			lastEvent=wc;
+		}
+	}
+
 	public RdmaShuffleClientEndpoint(RdmaActiveEndpointGroup<? extends RdmaActiveEndpoint> group, RdmaCmId idPriv,
 									 boolean serverSide, int bufferSize, PartitionRequestClientHandler clientHandler,
 									 NettyBufferPool bufferPool)
@@ -66,13 +79,25 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 
 	@Override
 	public void dispatchCqEvent(IbvWC wc) throws IOException {
-		synchronized (this) {
+			System.out.println("Server got event " + wc.getWr_id() + " : " + IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) +
+				"Old " + lastEvent.get() + "\n\n");
+			int newOpCode = wc.getOpcode();
+			IbvWC old = lastEvent.get();
+			if(old == null){
+				lastEvent.set(wc.clone());
+				System.out.println(" Last event1 = " + lastEvent.get());
+			} else if (old.getOpcode() == newOpCode){
+				System.out.println( "Last event: " + old  + "current :" + wc);
+				throw new RuntimeException("*******server got "+ IbvWC.IbvWcOpcode.valueOf(newOpCode) +" event twice in a row. last id = "+old.getWr_id()+", current id "+old.getWr_id()+"***********");
+			}
+			lastEvent.set(wc.clone());
+			System.out.println("Last event1 = " + lastEvent.get());
 			wcEvents.add(wc);
-		}
 	}
 
 	public void init() throws IOException {
 		super.init();
+		LOG.info("Allocating client rdma buffers");
 		this.receiveBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
 		this.registeredReceiveMemory = registerMemory(receiveBuffer).execute().getMr(); // register the send buffer
 
@@ -143,7 +168,7 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 					}
 				} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-						LOG.error("Send failed. reposting new send request request");
+						LOG.error("RdmaShuffle: Send failed. reposting new send request request");
 						RdmaSendReceiveUtil.postSendReq(this, ++workRequestId);
 					}
 					this.getSendBuffer().clear();

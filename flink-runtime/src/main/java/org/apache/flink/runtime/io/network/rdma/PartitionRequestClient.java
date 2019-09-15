@@ -156,13 +156,13 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 
 		// TODO (venkat): this should be done in seperate thread (see SingleInputGate.java:494)
 		// input channels are iterated over, i.e; future operator has to wait for one by one completion
-		LOG.debug("Requesting subpartition {} of partition {} with {} ms delay.",
-			subpartitionIndex, partitionId, delayMs);
+		LOG.info("Requesting subpartition {} of partition {} with {} ms delay using reader client {}.",
+			subpartitionIndex, partitionId, delayMs,readerClient.toString());
 
 //		clientHandler.addInputChannel(inputChannel);
 
 
-		LOG.info("returned from partition request");
+//		LOG.info("returned from partition request");
 		return null;
 	}
 
@@ -177,7 +177,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 	public void sendTaskEvent(ResultPartitionID partitionId, TaskEvent event, final RemoteInputChannel inputChannel)
 		throws IOException {
 		checkNotClosed();
-		LOG.debug("Sending task events");
+		LOG.info("Sending task events");
         boolean[] finished= new boolean[1];
 		NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(new NettyMessage.TaskEventRequest(event,
 			partitionId, inputChannel.getInputChannelId()));
@@ -199,6 +199,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 			// that outstanding backwards task events are not discarded.
 			//			tcpChannel.writeAndFlush(new NettyMessage.CloseRequest());
 			try {
+				LOG.info("sending client close request");
 				clientEndpoint.writeAndRead(new NettyMessage.CloseRequest()); // TODO(venkat): need clean way to write
 				// close request
 			} catch (Exception e) {
@@ -259,21 +260,25 @@ class PartitionReaderClient implements Runnable {
 			clientEndpoint.getSendBuffer().put(buf.nioBuffer());
 			RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
 		} catch (IOException ioe) {
-			LOG.error("Failed to serialize partion request");
+			LOG.error("Failed to serialize partition request");
 			return;
 		}
 		do {
 			try {
 //			for (int i=0;i<takeEventsCount;i++) {
 				IbvWC wc = clientEndpoint.getWcEvents().take();
-				LOG.info("Took completion event {} ", i);
+				LOG.info("Took completion event with work id {} ", wc.getWr_id());
 				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 						LOG.error("Receive posting failed. reposting new receive request");
-						RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
+//						RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 					} else { // first receive succeeded. Read the data and repost the next message
 						clientEndpoint.getReceiveBuffer().getInt(); // discard frame length
-						clientEndpoint.getReceiveBuffer().getInt(); // discard magic number
+						int magic = clientEndpoint.getReceiveBuffer().getInt();
+						if (magic!= NettyMessage.MAGIC_NUMBER){
+							LOG.error("Magic number mistmatch expected: %d got: %d",NettyMessage.MAGIC_NUMBER,magic);
+							// discard magic number
+						}
 						byte ID = clientEndpoint.getReceiveBuffer().get();
 						switch (ID) {
 							case NettyMessage.BufferResponse.ID:
@@ -286,13 +291,14 @@ class PartitionReaderClient implements Runnable {
 						clientEndpoint.getReceiveBuffer().clear();
 						RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 						//Post next request
+						clientEndpoint.getSendBuffer().clear();
 						clientEndpoint.getSendBuffer().put(buf.nioBuffer());
 						RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
 					}
 				} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-						LOG.error("Send failed. reposting new send request request");
-						RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+						LOG.error("Client: Send failed. reposting new send request request "+clientEndpoint.getEndpointStr());
+//						RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
 					}
 					clientEndpoint.getSendBuffer().clear();
 					// Send succeed does not require any action
@@ -333,6 +339,12 @@ class PartitionReaderClient implements Runnable {
 		// waiting would make the partitionRequest being posted after EndOfPartitionEvent. This would hang server
 		// thread
 		// waiting for more data.
+	}
+
+	@Override
+	public String toString() {
+		return "Reading subpartition " + subpartitionIndex + " partition Index " + partitionId + " at endpoint " +
+			clientEndpoint.getEndpointStr() + " remote channel " + inputChannel;
 	}
 }
 

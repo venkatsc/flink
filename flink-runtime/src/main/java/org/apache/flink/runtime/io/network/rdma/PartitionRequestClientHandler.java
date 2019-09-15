@@ -198,7 +198,7 @@ class PartitionRequestClientHandler {
 						nettyBuffer.readBytes(buffer.asByteBuf(), receivedSize);
 
 						inputChannel.onBuffer(buffer, bufferOrEvent.sequenceNumber, -1);
-						LOG.info("onBuffer finished");
+						LOG.info("onBuffer finished "+bufferOrEvent.sequenceNumber +" receiver id "+bufferOrEvent.receiverId);
 						readFinished = true;
 					}
 //					else if (bufferListener.waitForBuffer(bufferProvider, bufferOrEvent)) {

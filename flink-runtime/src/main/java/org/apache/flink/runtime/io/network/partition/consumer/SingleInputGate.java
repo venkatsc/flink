@@ -523,7 +523,7 @@ public class SingleInputGate implements InputGate {
 				for (InputChannel inputChannel : inputChannels.values()) {
 					if (!inputChannel.isReleased()){
 						LOG.info("Requesting partition from channel " + inputChannel + " partition id: " + inputChannel
-							.getPartitionId() + " for task " + this.owningTaskName);
+							.getPartitionId() + " for task " + this.owningTaskName + "subpartition index "+ consumedSubpartitionIndex);
 						inputChannel.requestSubpartition(consumedSubpartitionIndex);
 					}
 
