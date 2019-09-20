@@ -93,8 +93,27 @@ public class BufferConsumer implements Closeable {
 	public Buffer build() {
 		writerPosition.update();
 		int cachedWriterPosition = writerPosition.getCached();
-		Buffer slice = buffer.readOnlySlice(currentReaderPosition, cachedWriterPosition - currentReaderPosition);
+		int len = cachedWriterPosition -currentReaderPosition;
+		Buffer slice;
+		if (buffer.getMemorySegment().isOffHeap()) {
+			if (len == buffer.getMemorySegment().size()) {
+				// For RDMA, the client posts the buffer with maximum capacity.
+				// if server send exact data, there will not be enough place to accomodate
+				// header see NettyMessage.BufferResponse for header size (currently it is 35 bytes).
+				// So, we post 35 bytes less and at network layer it will be appended to the header
+				// On reader we have to discard the 35 bytes by setting read Index of buffer to 35 (buffer position starts at 0)
+
+				System.out.printf("CWP: %d, CRP: %d, len: %d, segment address: %d\n", cachedWriterPosition, currentReaderPosition, len, buffer.getMemorySegment().getAddress());
+				slice = buffer.readOnlySlice(currentReaderPosition, len - 39);
+				currentReaderPosition = cachedWriterPosition - 39;
+				return slice.retainBuffer();
+			}// assume this buff is less than package
+		}// assume this buff is buffer on local channel
+		slice = buffer.readOnlySlice(currentReaderPosition, cachedWriterPosition - currentReaderPosition);
 		currentReaderPosition = cachedWriterPosition;
+		//System.out.printf("segment address:%d, slice address: %d\n",buffer.getMemorySegment().getAddress(),slice.getMemorySegment().getAddress()+slice.getMemorySegmentOffset());
+//		slice.getMemorySegment().getAddress()+slice.getMemorySegmentOffset();
+//		slice.getSize();
 		return slice.retainBuffer();
 	}
 

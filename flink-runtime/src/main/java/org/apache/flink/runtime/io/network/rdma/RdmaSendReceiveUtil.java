@@ -29,8 +29,54 @@ import sun.nio.ch.DirectBuffer;
 import java.io.IOException;
 import java.util.LinkedList;
 
+import org.apache.flink.runtime.io.network.buffer.ReadOnlySlicedNetworkBuffer;
+
 public class RdmaSendReceiveUtil {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaSendReceiveUtil.class);
+
+	public static void postSendReqForBufferResponse(RdmaActiveEndpoint endpoint, int workReqId,NettyMessage.BufferResponse response) throws IOException {
+
+		if (endpoint instanceof RdmaShuffleServerEndpoint) {
+			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
+//			LOG.info("posting server send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
+			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
+			IbvSge sendSGE = new IbvSge();
+			DirectBuffer buf = (DirectBuffer) response.getHeaderBuf();
+			sendSGE.setAddr(buf.address());
+			sendSGE.setLength(response.getHeaderBuf().capacity());
+			sendSGE.setLkey(clientEndpoint.getWholeMR().getLkey());
+			sges.add(sendSGE);
+
+			IbvSge sendSGE1 = new IbvSge();
+			ReadOnlySlicedNetworkBuffer buffer = (ReadOnlySlicedNetworkBuffer) response.getNettyBuffer();
+			if (buffer.isDirect()) {
+				sendSGE1.setAddr(buffer.getMemorySegment().getAddress() + buffer.getMemorySegmentOffset());
+				sendSGE1.setLength(buffer.getSize());
+				sendSGE1.setLkey(clientEndpoint.getWholeMR().getLkey());
+				sges.add(sendSGE1);
+			}else{ // it could be event such as EndOfPartitionEvent
+				// it is serialized into direct buffer using netty allocator, see the NettyMessage.BufferResponse
+				sendSGE1.setAddr(response.getTempBuffer().memoryAddress());
+				sendSGE1.setLength(buffer.getSize());
+				sendSGE1.setLkey(clientEndpoint.getWholeMR().getLkey());
+				sges.add(sendSGE1);
+			}
+			// Create send Work Request (WR)
+			IbvSendWR sendWR = new IbvSendWR();
+			sendWR.setWr_id(workReqId);
+			sendWR.setSg_list(sges);
+//			if (finish){
+//				sendWR.setOpcode(IbvSendWR.IBV_WR_SEND_WITH_IMM);
+//			}else {
+			sendWR.setOpcode(IbvSendWR.IBV_WR_SEND);
+//			}
+			sendWR.setSend_flags(IbvSendWR.IBV_SEND_SIGNALED);
+
+			LinkedList<IbvSendWR> sendWRs = new LinkedList<>();
+			sendWRs.add(sendWR);
+			clientEndpoint.postSend(sendWRs).execute().free();
+		}
+	}
 
 	public static void postSendReq(RdmaActiveEndpoint endpoint, int workReqId) throws IOException {
 

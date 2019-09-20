@@ -266,7 +266,7 @@ public abstract class NettyMessage {
 		public static final byte ID = 0;
 
 		final ByteBuf buffer;
-
+		private ByteBuf bufferTmp;
 		final InputChannelID receiverId;
 
 		final int sequenceNumber;
@@ -276,6 +276,10 @@ public abstract class NettyMessage {
 		final boolean isBuffer;
 
 		final boolean moreAvailable;
+
+		ByteBuffer headerBuf = null;
+
+		private boolean bufferReleased=false;
 
 		private BufferResponse(
 			ByteBuf buffer,
@@ -304,6 +308,16 @@ public abstract class NettyMessage {
 			this.moreAvailable = moreAvailable;
 		}
 
+		ByteBuf getTempBuffer(){
+			return bufferTmp;
+		}
+
+		public void releaseTempBuf(){
+			if (bufferTmp!=null){
+				bufferTmp.release();
+			}
+		}
+
 		boolean isBuffer() {
 			return isBuffer;
 		}
@@ -313,7 +327,17 @@ public abstract class NettyMessage {
 		}
 
 		void releaseBuffer() {
-			buffer.release();
+			if (!bufferReleased) {
+				buffer.release();
+			}
+		}
+
+		/**
+		 * Should only be called after {BufferResponse.write()}
+		 * @return
+		 */
+		ByteBuffer getHeaderBuf(){
+			return headerBuf;
 		}
 
 		// --------------------------------------------------------------------
@@ -325,7 +349,6 @@ public abstract class NettyMessage {
 			// receiver ID (16), sequence number (4), backlog (4), isBuffer (1), moreAvailable(1), buffer size (4)
 			final int messageHeaderLength = 16 + 4 + 4 + 1+1 + 4;
 
-			ByteBuf headerBuf = null;
 			try {
 				if (buffer instanceof Buffer) {
 					// in order to forward the buffer to netty, it needs an allocator set
@@ -333,24 +356,35 @@ public abstract class NettyMessage {
 				}
 
 				// only allocate header buffer - we will combine it with the data buffer below
-				headerBuf = allocateBuffer(allocator, ID, messageHeaderLength, buffer.readableBytes(), false);
-
+//				headerBuf = allocateBuffer(allocator, ID, messageHeaderLength, 0, false);
+				headerBuf = ByteBuffer.allocateDirect(FRAME_HEADER_LENGTH+messageHeaderLength);
+				headerBuf.putInt(FRAME_HEADER_LENGTH + messageHeaderLength);
+				headerBuf.putInt(MAGIC_NUMBER);
+				headerBuf.put(ID);
 				receiverId.writeTo(headerBuf);
-				headerBuf.writeInt(sequenceNumber);
-				headerBuf.writeInt(backlog);
-				headerBuf.writeBoolean(isBuffer);
-				headerBuf.writeBoolean(moreAvailable);
-				headerBuf.writeInt(buffer.readableBytes());
+				headerBuf.putInt(sequenceNumber);
+				headerBuf.putInt(backlog);
+				headerBuf.put(isBuffer?(byte) 1:(byte)0);
+				headerBuf.put(moreAvailable?(byte) 1:(byte)0);
+				headerBuf.putInt(buffer.readableBytes());
 
-				CompositeByteBuf composityBuf = allocator.compositeDirectBuffer();
-				composityBuf.addComponent(headerBuf);
-				composityBuf.addComponent(buffer);
-				// update writer index since we have data written to the components:
-				composityBuf.writerIndex(headerBuf.writerIndex() + buffer.writerIndex());
-				return composityBuf;
+				if (!buffer.isDirect()){
+					bufferTmp = allocator.directBuffer(buffer.capacity());
+					bufferTmp.writeBytes(buffer);
+					bufferReleased = true;
+					buffer.release();
+//					buffer=bufferTmp;
+				}
+
+//				CompositeByteBuf composityBuf = allocator.compositeDirectBuffer();
+//				composityBuf.addComponent(headerBuf);
+//				composityBuf.addComponent(buffer);
+//				// update writer index since we have data written to the components:
+//				composityBuf.writerIndex(headerBuf.writerIndex() + buffer.writerIndex());
+				return null;
 			} catch (Throwable t) {
 				if (headerBuf != null) {
-					headerBuf.release();
+					headerBuf=null;
 				}
 				buffer.release();
 

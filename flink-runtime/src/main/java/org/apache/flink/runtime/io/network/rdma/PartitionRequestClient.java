@@ -276,7 +276,7 @@ class PartitionReaderClient implements Runnable {
 						clientEndpoint.getReceiveBuffer().getInt(); // discard frame length
 						int magic = clientEndpoint.getReceiveBuffer().getInt();
 						if (magic!= NettyMessage.MAGIC_NUMBER){
-							LOG.error("Magic number mistmatch expected: %d got: %d",NettyMessage.MAGIC_NUMBER,magic);
+							LOG.error("Magic number mistmatch expected: {} got: {}",NettyMessage.MAGIC_NUMBER,magic);
 							// discard magic number
 						}
 						byte ID = clientEndpoint.getReceiveBuffer().get();

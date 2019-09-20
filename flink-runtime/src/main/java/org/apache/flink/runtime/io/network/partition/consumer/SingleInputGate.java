@@ -388,12 +388,12 @@ public class SingleInputGate implements InputGate {
 				} else if (partitionLocation.isRemote()) {
 					newChannel = unknownChannel.toRemoteInputChannel(partitionLocation.getConnectionId());
 
-					if (this.isCreditBased) {
+//					if (this.isCreditBased) {
 						checkState(this.networkBufferPool != null, "Bug in input gate setup logic: " +
 							"global buffer pool has not been set for this input gate.");
 						((RemoteInputChannel) newChannel).assignExclusiveSegments(
 							networkBufferPool.requestMemorySegments(networkBuffersPerChannel));
-					}
+//					}
 				} else {
 					throw new IllegalStateException("Tried to update unknown channel with unknown channel.");
 				}

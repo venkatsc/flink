@@ -32,6 +32,7 @@ public class RdmaServerRequestHandler implements Runnable {
 	private final ResultPartitionProvider partitionProvider;
 	private final TaskEventDispatcher taskEventDispatcher;
 	private final Map<InputChannelID, NetworkSequenceViewReader> readers = new HashMap<>();
+	private final Map<Integer,NettyMessage.BufferResponse> inFlight = new HashMap<>();
 
 	public RdmaServerRequestHandler(RdmaServerEndpoint<RdmaShuffleServerEndpoint> serverEndpoint,
 									ResultPartitionProvider partitionProvider, TaskEventDispatcher
@@ -173,11 +174,21 @@ public class RdmaServerRequestHandler implements Runnable {
 							}else{
 								LOG.info("skip: sending error message");
 							}
-								clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
+								response.write(bufferPool); // creates the header info
+
+//								clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
 								clientEndpoint.getReceiveBuffer().clear();
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
 								// receive
-								RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+
+								// hold references of the response untill the send completes
+								if (response instanceof NettyMessage.BufferResponse) {
+									RdmaSendReceiveUtil.postSendReqForBufferResponse(clientEndpoint, ++workRequestId,(NettyMessage.BufferResponse)response);
+									inFlight.put(workRequestId,(NettyMessage.BufferResponse) response);
+								}else{
+									clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
+									RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+								}
 //								if (!reader.isRegisteredAsAvailable()) {
 //									LOG.error("Notifying the sub-partition consume");
 //									reader.notifySubpartitionConsumed();
@@ -220,6 +231,12 @@ public class RdmaServerRequestHandler implements Runnable {
 						if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 							LOG.error("Server:Send failed. reposting new send request request"+getEndpointStr(clientEndpoint));
 //							RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+						}
+
+						NettyMessage.BufferResponse response = inFlight.get(wc.getWr_id());
+						if (response !=null) {
+							response.releaseBuffer();
+							response.releaseTempBuf();
 						}
 						// send completed, so clear the buffer
 						clientEndpoint.getSendBuffer().clear();
