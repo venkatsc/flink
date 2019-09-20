@@ -63,6 +63,7 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 	public void start(InetSocketAddress address) throws IOException {
 		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleClientEndpoint>(1000, true, 128, 4, 128);
 		endpointGroup.init(this);
+		endpointGroup.getConnParam().setRnr_retry_count((byte)7);
 		endpoint = endpointGroup.createEndpoint();
 		try {
 			endpoint.connect(address, 1000);

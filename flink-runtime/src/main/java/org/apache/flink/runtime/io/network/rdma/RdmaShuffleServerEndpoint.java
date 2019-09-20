@@ -36,6 +36,8 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 	private int workRequestId = 0;
 	private int bufferSize; // Todo: set default buffer size
 	private ByteBuffer sendBuffer; // Todo: add buffer manager with multiple buffers
+	private IbvMr wholeMR;
+
 	private IbvMr registeredSendMemory; // Registered memory for the above buffer
 
 	private ByteBuffer availableFreeReceiveBuffers;
@@ -70,19 +72,14 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 
 	@Override
 	public void dispatchCqEvent(IbvWC wc) throws IOException {
-			System.out.println("Server got event " + wc.getWr_id() + " : " + IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) +
-				"Old " + lastEvent.get() + "\n\n");
 			int newOpCode = wc.getOpcode();
 			IbvWC old = lastEvent.get();
 			if(old == null){
 				lastEvent.set(wc.clone());
-				System.out.println(" Last event1 = " + lastEvent.get());
 			} else if (old.getOpcode() == newOpCode){
-				System.out.println( "Last event: " + old  + "current :" + wc);
 				throw new RuntimeException("*******server got "+ IbvWC.IbvWcOpcode.valueOf(newOpCode) +" event twice in a row. last id = "+old.getWr_id()+", current id "+old.getWr_id()+"***********");
 			}
 			lastEvent.set(wc.clone());
-			System.out.println("Last event1 = " + lastEvent.get());
 			wcEvents.add(wc);
 	}
 
@@ -91,32 +88,38 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 		LOG.info("Allocating server rdma buffers");
 		this.sendBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
 		this.receiveBuffer = ByteBuffer.allocateDirect(bufferSize);
-		this.registeredReceiveMemory = registerMemory(receiveBuffer).execute().getMr();
-		this.registeredSendMemory = registerMemory(sendBuffer).execute().getMr(); // register the send buffer
-		this.availableFreeReceiveBuffers = ByteBuffer.allocateDirect(2); // TODO: assumption of less receive buffers
-		this.availableFreeReceiveBuffersRegisteredMemory = registerMemory(availableFreeReceiveBuffers).execute()
-			.getMr();
-		this.availableFreeReceiveBuffersNotification = ByteBuffer.allocateDirect(2); // TODO: assumption of less
+		this.wholeMR = registerMemory().execute().getMr();
+		System.out.printf("server rkey: %d lkey: %d handle:%d\n",wholeMR.getRkey(),wholeMR.getLkey(),wholeMR.getHandle());
+//		this.registeredReceiveMemory = registerMemory(receiveBuffer).execute().getMr();
+//		this.registeredSendMemory = registerMemory(sendBuffer).execute().getMr(); // register the send buffer
+//		this.availableFreeReceiveBuffers = ByteBuffer.allocateDirect(2); // TODO: assumption of less receive buffers
+//		this.availableFreeReceiveBuffersRegisteredMemory = registerMemory(availableFreeReceiveBuffers).execute()
+//			.getMr();
+//		this.availableFreeReceiveBuffersNotification = ByteBuffer.allocateDirect(2); // TODO: assumption of less
 		// receive buffers
-		this.availableFreeReceiveBuffersNotificationRegisteredMemory = registerMemory
-			(availableFreeReceiveBuffersNotification).execute().getMr();
+//		this.availableFreeReceiveBuffersNotificationRegisteredMemory = registerMemory
+//			(availableFreeReceiveBuffersNotification).execute().getMr();
 	}
 
 	public ByteBuffer getSendBuffer() {
 		return this.sendBuffer;
 	}
 
-	public IbvMr getRegisteredSendMemory() {
-		return registeredSendMemory;
+	public IbvMr getWholeMR(){
+		return wholeMR;
 	}
+
+//	public IbvMr getRegisteredSendMemory() {
+//		return registeredSendMemory;
+//	}
 
 	public ByteBuffer getReceiveBuffer() {
 		return this.receiveBuffer;
 	}
 
-	public IbvMr getRegisteredReceiveMemory() {
-		return registeredReceiveMemory;
-	}
+//	public IbvMr getRegisteredReceiveMemory() {
+//		return registeredReceiveMemory;
+//	}
 
 	public ArrayBlockingQueue<IbvWC> getWcEvents() {
 		synchronized (this) {

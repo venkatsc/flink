@@ -24,6 +24,7 @@ import com.ibm.disni.verbs.IbvSendWR;
 import com.ibm.disni.verbs.IbvSge;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sun.nio.ch.DirectBuffer;
 
 import java.io.IOException;
 import java.util.LinkedList;
@@ -38,9 +39,9 @@ public class RdmaSendReceiveUtil {
 //			LOG.info("posting server send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge sendSGE = new IbvSge();
-			sendSGE.setAddr(clientEndpoint.getRegisteredSendMemory().getAddr());
-			sendSGE.setLength(clientEndpoint.getRegisteredSendMemory().getLength());
-			sendSGE.setLkey(clientEndpoint.getRegisteredSendMemory().getLkey());
+			sendSGE.setAddr(((DirectBuffer) clientEndpoint.getSendBuffer()).address());
+			sendSGE.setLength(clientEndpoint.getSendBuffer().capacity());
+			sendSGE.setLkey(clientEndpoint.getWholeMR().getLkey());
 			sges.add(sendSGE);
 
 			// Create send Work Request (WR)
@@ -62,9 +63,9 @@ public class RdmaSendReceiveUtil {
 //			LOG.info("posting client send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge sendSGE = new IbvSge();
-			sendSGE.setAddr(clientEndpoint.getRegisteredSendMemory().getAddr());
-			sendSGE.setLength(clientEndpoint.getRegisteredSendMemory().getLength());
-			sendSGE.setLkey(clientEndpoint.getRegisteredSendMemory().getLkey());
+			sendSGE.setAddr(((DirectBuffer) clientEndpoint.getSendBuffer()).address());
+			sendSGE.setLength(clientEndpoint.getSendBuffer().capacity());
+			sendSGE.setLkey(clientEndpoint.getWholeMR().getLkey());
 			sges.add(sendSGE);
 			// Create send Work Request (WR)
 			IbvSendWR sendWR = new IbvSendWR();
@@ -90,9 +91,9 @@ public class RdmaSendReceiveUtil {
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge recvSGE = new IbvSge();
-			recvSGE.setAddr(clientEndpoint.getRegisteredReceiveMemory().getAddr());
-			recvSGE.setLength(clientEndpoint.getRegisteredReceiveMemory().getLength());
-			recvSGE.setLkey(clientEndpoint.getRegisteredReceiveMemory().getLkey());
+			recvSGE.setAddr(((DirectBuffer) clientEndpoint.getReceiveBuffer()).address());
+			recvSGE.setLength(clientEndpoint.getReceiveBuffer().capacity());
+			recvSGE.setLkey(clientEndpoint.getWholeMR().getLkey());
 			sges.add(recvSGE);
 
 			IbvRecvWR recvWR = new IbvRecvWR();
@@ -107,9 +108,9 @@ public class RdmaSendReceiveUtil {
 			RdmaShuffleClientEndpoint clientEndpoint = (RdmaShuffleClientEndpoint) endpoint;
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge recvSGE = new IbvSge();
-			recvSGE.setAddr(clientEndpoint.getRegisteredReceiveMemory().getAddr());
-			recvSGE.setLength(clientEndpoint.getRegisteredReceiveMemory().getLength());
-			recvSGE.setLkey(clientEndpoint.getRegisteredReceiveMemory().getLkey());
+			recvSGE.setAddr(((DirectBuffer) clientEndpoint.getReceiveBuffer()).address());
+			recvSGE.setLength(clientEndpoint.getReceiveBuffer().capacity());
+			recvSGE.setLkey(clientEndpoint.getWholeMR().getLkey());
 			sges.add(recvSGE);
 
 			IbvRecvWR recvWR = new IbvRecvWR();
