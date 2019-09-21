@@ -20,6 +20,8 @@ package org.apache.flink.runtime.io.network.rdma;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -41,6 +43,8 @@ import org.apache.flink.runtime.event.TaskEvent;
 import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.io.network.api.serialization.EventSerializer;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
+import org.apache.flink.runtime.io.network.buffer.NetworkBuffer;
+import org.apache.flink.runtime.io.network.buffer.ReadOnlySlicedNetworkBuffer;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.io.network.partition.consumer.InputChannel;
 import org.apache.flink.runtime.io.network.partition.consumer.InputChannelID;
@@ -54,6 +58,7 @@ import org.apache.flink.util.ExceptionUtils;
  * more information.
  */
 public abstract class NettyMessage {
+	private static final Logger LOG = LoggerFactory.getLogger(NettyMessage.class);
 
 	// ------------------------------------------------------------------------
 	// Note: Every NettyMessage subtype needs to have a public 0-argument
@@ -265,7 +270,7 @@ public abstract class NettyMessage {
 
 		public static final byte ID = 0;
 
-		final ByteBuf buffer;
+		ByteBuf buffer;
 		private ByteBuf bufferTmp;
 		final InputChannelID receiverId;
 
@@ -279,15 +284,18 @@ public abstract class NettyMessage {
 
 		ByteBuffer headerBuf = null;
 
-		private boolean bufferReleased=false;
+		private boolean bufferReleased = false;
+
+		private Buffer readonlySlicedResponse;
 
 		private BufferResponse(
-			ByteBuf buffer,
+			Buffer buffer,
 			boolean isBuffer,
 			int sequenceNumber,
 			InputChannelID receiverId,
 			int backlog, boolean moreAvailable) {
-			this.buffer = checkNotNull(buffer);
+			this.readonlySlicedResponse = buffer;
+//			this.buffer = checkNotNull(buffer);
 			this.isBuffer = isBuffer;
 			this.sequenceNumber = sequenceNumber;
 			this.receiverId = checkNotNull(receiverId);
@@ -308,12 +316,12 @@ public abstract class NettyMessage {
 			this.moreAvailable = moreAvailable;
 		}
 
-		ByteBuf getTempBuffer(){
+		ByteBuf getTempBuffer() {
 			return bufferTmp;
 		}
 
-		public void releaseTempBuf(){
-			if (bufferTmp!=null){
+		public void releaseTempBuf() {
+			if (bufferTmp != null) {
 				bufferTmp.release();
 			}
 		}
@@ -327,16 +335,29 @@ public abstract class NettyMessage {
 		}
 
 		void releaseBuffer() {
-			if (!bufferReleased) {
+			if (!bufferReleased && buffer != null) {
 				buffer.release();
 			}
 		}
 
+		int getSizeOfRetainedSlice() {
+			if (readonlySlicedResponse == null) {
+				return 0;
+			} else {
+				return readonlySlicedResponse.getSize();
+			}
+		}
+
+		Buffer getResponseReadonlySlice() {
+			return readonlySlicedResponse;
+		}
+
 		/**
 		 * Should only be called after {BufferResponse.write()}
+		 *
 		 * @return
 		 */
-		ByteBuffer getHeaderBuf(){
+		ByteBuffer getHeaderBuf() {
 			return headerBuf;
 		}
 
@@ -347,7 +368,7 @@ public abstract class NettyMessage {
 		@Override
 		ByteBuf write(ByteBufAllocator allocator) throws IOException {
 			// receiver ID (16), sequence number (4), backlog (4), isBuffer (1), moreAvailable(1), buffer size (4)
-			final int messageHeaderLength = 16 + 4 + 4 + 1+1 + 4;
+			final int messageHeaderLength = 16 + 4 + 4 + 1 + 1 + 4;
 
 			try {
 				if (buffer instanceof Buffer) {
@@ -357,19 +378,19 @@ public abstract class NettyMessage {
 
 				// only allocate header buffer - we will combine it with the data buffer below
 //				headerBuf = allocateBuffer(allocator, ID, messageHeaderLength, 0, false);
-				headerBuf = ByteBuffer.allocateDirect(FRAME_HEADER_LENGTH+messageHeaderLength);
+				headerBuf = ByteBuffer.allocateDirect(FRAME_HEADER_LENGTH + messageHeaderLength);
 				headerBuf.putInt(FRAME_HEADER_LENGTH + messageHeaderLength);
 				headerBuf.putInt(MAGIC_NUMBER);
 				headerBuf.put(ID);
 				receiverId.writeTo(headerBuf);
 				headerBuf.putInt(sequenceNumber);
 				headerBuf.putInt(backlog);
-				headerBuf.put(isBuffer?(byte) 1:(byte)0);
-				headerBuf.put(moreAvailable?(byte) 1:(byte)0);
+				headerBuf.put(isBuffer ? (byte) 1 : (byte) 0);
+				headerBuf.put(moreAvailable ? (byte) 1 : (byte) 0);
 				headerBuf.putInt(buffer.readableBytes());
 
-				if (!buffer.isDirect()){
-					bufferTmp = allocator.directBuffer(buffer.capacity());
+				if (!buffer.isDirect()) {
+					bufferTmp = allocator.directBuffer(buffer.readableBytes());
 					bufferTmp.writeBytes(buffer);
 					bufferReleased = true;
 					buffer.release();
@@ -384,7 +405,7 @@ public abstract class NettyMessage {
 				return null;
 			} catch (Throwable t) {
 				if (headerBuf != null) {
-					headerBuf=null;
+					headerBuf = null;
 				}
 				buffer.release();
 
@@ -403,7 +424,8 @@ public abstract class NettyMessage {
 			boolean moreAvailable = buffer.readBoolean();
 			int size = buffer.readInt();
 
-			ByteBuf retainedSlice = buffer.readSlice(size).retain();
+			Buffer retainedSlice = ((NetworkBuffer) buffer).readOnlySlice(((NetworkBuffer) buffer).getReaderIndex(),
+				size);
 			return new BufferResponse(retainedSlice, isBuffer, sequenceNumber, receiverId, backlog, moreAvailable);
 		}
 	}

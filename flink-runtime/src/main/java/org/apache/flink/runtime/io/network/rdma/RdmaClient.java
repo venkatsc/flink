@@ -74,7 +74,6 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 
 		LOG.info("SimpleClient::client channel set up ");
 		// start and post a receive
-		RdmaSendReceiveUtil.postReceiveReq(endpoint, ++workRequestId);
 	}
 
 	public void stop() {

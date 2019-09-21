@@ -39,6 +39,8 @@ package org.apache.flink.runtime.io.network.rdma;
 import org.apache.flink.runtime.event.TaskEvent;
 import org.apache.flink.runtime.io.network.ConnectionID;
 import org.apache.flink.runtime.io.network.PartitionRequestClientIf;
+import org.apache.flink.runtime.io.network.buffer.Buffer;
+import org.apache.flink.runtime.io.network.buffer.NetworkBuffer;
 import org.apache.flink.runtime.io.network.netty.exception.LocalTransportException;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel;
@@ -255,7 +257,10 @@ class PartitionReaderClient implements Runnable {
 		final NettyMessage.PartitionRequest msg = new NettyMessage.PartitionRequest(
 			partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
 		ByteBuf buf;
+		ByteBuf receiveBuffer;
 		try {
+			receiveBuffer = (NetworkBuffer)inputChannel.getBufferProvider().requestBuffer();
+			RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint, ++workRequestId,receiveBuffer);
 			buf = msg.write(clientEndpoint.getNettyBufferpool());
 			clientEndpoint.getSendBuffer().put(buf.nioBuffer());
 			RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
@@ -273,23 +278,27 @@ class PartitionReaderClient implements Runnable {
 						LOG.error("Receive posting failed. reposting new receive request");
 //						RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 					} else { // first receive succeeded. Read the data and repost the next message
-						clientEndpoint.getReceiveBuffer().getInt(); // discard frame length
-						int magic = clientEndpoint.getReceiveBuffer().getInt();
+						// since RDMA writes to the direct memory, receiver buffer indexes starts at 0
+						// resulting in IndexOutOfBoundsException. To make it work, we need to set index to
+						// max segment size
+						receiveBuffer.writerIndex(((NetworkBuffer) receiveBuffer).getMemorySegment().size());
+						receiveBuffer.readInt(); // discard frame length
+						int magic = receiveBuffer.readInt();
 						if (magic!= NettyMessage.MAGIC_NUMBER){
 							LOG.error("Magic number mistmatch expected: {} got: {}",NettyMessage.MAGIC_NUMBER,magic);
 							// discard magic number
 						}
-						byte ID = clientEndpoint.getReceiveBuffer().get();
+						byte ID = receiveBuffer.readByte();
 						switch (ID) {
 							case NettyMessage.BufferResponse.ID:
-								clientHandler.decodeMsg(NettyMessage.BufferResponse.readFrom(Unpooled.wrappedBuffer
-									(clientEndpoint.getReceiveBuffer())), false, clientEndpoint, inputChannel,finished);
+								clientHandler.decodeMsg(NettyMessage.BufferResponse.readFrom(receiveBuffer), false, clientEndpoint, inputChannel,finished);
 								break;
 							default:
 								LOG.error(" Un-identified request type " + ID);
 						}
-						clientEndpoint.getReceiveBuffer().clear();
-						RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
+						receiveBuffer = (ByteBuf)inputChannel.getBufferProvider().requestBuffer();
+//						clientEndpoint.getReceiveBuffer().clear();
+						RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint, ++workRequestId,receiveBuffer);
 						//Post next request
 						clientEndpoint.getSendBuffer().clear();
 						clientEndpoint.getSendBuffer().put(buf.nioBuffer());

@@ -196,7 +196,7 @@ public class RdmaServerRequestHandler implements Runnable {
 //								} else {
 //									LOG.error("Still not finished subpartition");
 //								}
-							} else if (msgClazz == RdmaMessage.TaskEventRequest.class) {
+							} else if (msgClazz == NettyMessage.TaskEventRequest.class) {
 								NettyMessage.TaskEventRequest request = (NettyMessage.TaskEventRequest) clientRequest;
 								LOG.error("Unhandled request type TaskEventRequest");
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
@@ -233,7 +233,7 @@ public class RdmaServerRequestHandler implements Runnable {
 //							RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
 						}
 
-						NettyMessage.BufferResponse response = inFlight.get(wc.getWr_id());
+						NettyMessage.BufferResponse response = inFlight.remove(wc.getWr_id());
 						if (response !=null) {
 							response.releaseBuffer();
 							response.releaseTempBuf();

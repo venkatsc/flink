@@ -59,9 +59,9 @@ public class InputChannelID extends AbstractID {
 		return new InputChannelID(lower, upper);
 	}
 
-	public static InputChannelID fromByteBuf(ByteBuffer buf) {
-		long lower = buf.getLong();
-		long upper = buf.getLong();
-		return new InputChannelID(lower, upper);
-	}
+//	public static InputChannelID fromByteBuf(ByteBuffer buf) {
+//		long lower = buf.getLong();
+//		long upper = buf.getLong();
+//		return new InputChannelID(lower, upper);
+//	}
 }

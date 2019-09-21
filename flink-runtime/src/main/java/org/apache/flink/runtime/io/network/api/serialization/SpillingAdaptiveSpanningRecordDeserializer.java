@@ -113,7 +113,7 @@ public class SpillingAdaptiveSpanningRecordDeserializer<T extends IOReadableWrit
 						return DeserializationResult.LAST_RECORD_FROM_BUFFER;
 					}
 					else {
-						throw new IndexOutOfBoundsException("Remaining = " + remaining);
+						throw new IndexOutOfBoundsException("Remaining = " + remaining + " position= " + this.nonSpanningWrapper.position + " limit= " + this.nonSpanningWrapper.limit);
 					}
 				}
 				catch (IndexOutOfBoundsException e) {

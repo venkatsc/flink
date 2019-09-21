@@ -211,7 +211,7 @@ public class TaskManagerOptions {
 	 */
 	public static final ConfigOption<String> MANAGED_MEMORY_SIZE =
 			key("taskmanager.memory.size")
-			.defaultValue("0")
+			.defaultValue("500")
 			.withDescription("The amount of memory (in megabytes) that the task manager reserves on-heap or off-heap" +
 				" (depending on taskmanager.memory.off-heap) for sorting, hash tables, and caching of intermediate" +
 				" results. If unspecified, the memory manager will take a fixed ratio with respect to the size of" +
@@ -240,7 +240,7 @@ public class TaskManagerOptions {
 	 **/
 	public static final ConfigOption<Boolean> MEMORY_OFF_HEAP =
 			key("taskmanager.memory.off-heap")
-			.defaultValue(false)
+			.defaultValue(true)
 				.withDescription(Description.builder()
 					.text("Memory allocation method (JVM heap or off-heap), used for managed memory of the" +
 						" TaskManager. For setups with larger quantities of memory, this can" +
@@ -254,7 +254,7 @@ public class TaskManagerOptions {
 	 */
 	public static final ConfigOption<Boolean> MANAGED_MEMORY_PRE_ALLOCATE =
 			key(MANAGED_MEMORY_PRE_ALLOCATE_KEY)
-			.defaultValue(false)
+			.defaultValue(true)
 			.withDescription(Description.builder()
 				.text("Whether TaskManager managed memory should be pre-allocated when the TaskManager is starting." +
 					" When %s is set to true, then it is advised that this configuration is also" +

@@ -41,6 +41,7 @@ import org.apache.flink.runtime.io.network.buffer.Buffer;
 import org.apache.flink.runtime.io.network.buffer.BufferProvider;
 import org.apache.flink.runtime.io.network.buffer.FreeingBufferRecycler;
 import org.apache.flink.runtime.io.network.buffer.NetworkBuffer;
+import org.apache.flink.runtime.io.network.buffer.ReadOnlySlicedNetworkBuffer;
 import org.apache.flink.runtime.io.network.rdma.exception.RemoteTransportException;
 import org.apache.flink.runtime.io.network.partition.PartitionNotFoundException;
 import org.apache.flink.runtime.io.network.partition.consumer.InputChannelID;
@@ -173,31 +174,27 @@ class PartitionRequestClientHandler {
 	private void decodeBufferOrEvent(RemoteInputChannel inputChannel, NettyMessage.BufferResponse bufferOrEvent,
 										boolean isStagedBuffer, RdmaShuffleClientEndpoint clientEndpoint,boolean[] finished) throws
 		Throwable {
-		boolean releaseNettyBuffer = true;
+//		boolean releaseNettyBuffer = true;
 
 		try {
-			ByteBuf nettyBuffer = bufferOrEvent.getNettyBuffer();
-			final int receivedSize = nettyBuffer.readableBytes();
+//			ByteBuf nettyBuffer = bufferOrEvent.getNettyBuffer();
+			final int receivedSize = bufferOrEvent.getSizeOfRetainedSlice();
 			if (bufferOrEvent.isBuffer()) {
 				// ---- Buffer ------------------------------------------------
 				// Early return for empty buffers. Otherwise Netty's readBytes() throws an
 				// IndexOutOfBoundsException.
-				if (receivedSize == 0) {
+				if (bufferOrEvent.getSizeOfRetainedSlice() == 0) {
 					inputChannel.onEmptyBuffer(bufferOrEvent.sequenceNumber, -1);
 				}
 				BufferProvider bufferProvider = inputChannel.getBufferProvider();
-				if (bufferProvider == null) {
-					// receiver has been cancelled/failed
-					LOG.info("receiver cancelled/failed");
-					cancelRequestFor(bufferOrEvent.receiverId, clientEndpoint);
-				}
+
 				boolean readFinished= false;
 				do {
 					Buffer buffer = bufferProvider.requestBuffer();
 					if (buffer != null) {
-						nettyBuffer.readBytes(buffer.asByteBuf(), receivedSize);
+//						nettyBuffer.readBytes(buffer.asByteBuf(), receivedSize);
 
-						inputChannel.onBuffer(buffer, bufferOrEvent.sequenceNumber, -1);
+						inputChannel.onBuffer(bufferOrEvent.getResponseReadonlySlice(), bufferOrEvent.sequenceNumber, -1);
 						LOG.info("onBuffer finished "+bufferOrEvent.sequenceNumber +" receiver id "+bufferOrEvent.receiverId);
 						readFinished = true;
 					}
@@ -216,21 +213,32 @@ class PartitionRequestClientHandler {
 
 				// ---- Event -------------------------------------------------
 				// TODO We can just keep the serialized data in the Netty buffer and release it later at the reader
-				byte[] byteArray = new byte[receivedSize];
-				nettyBuffer.readBytes(byteArray);
+				// SingleInputGate.java getNextBufferOrEvent() has a weired way of checking buffer or event
+				// if it is not wrapped memorySegment, then it is considered as buffer. WTF, spent hours debugging it.
+				// see how ReadOnlySlicedNetworkBuffer isBuffer implemented
+				//	@Override
+				//	public boolean isBuffer() {
+				//		return getBuffer().isBuffer();
+				//	}
+				ReadOnlySlicedNetworkBuffer buffer=(ReadOnlySlicedNetworkBuffer)bufferOrEvent.getResponseReadonlySlice();
+				byte[] byteArray = new byte[buffer.getSize()];
+				buffer.getBytes(buffer.getReaderIndex(),byteArray);
+//				nettyBuffer.readBytes(byteArray);
 				MemorySegment memSeg = MemorySegmentFactory.wrap(byteArray);
-				Buffer buffer = new NetworkBuffer(memSeg, FreeingBufferRecycler.INSTANCE, false, receivedSize);
-				inputChannel.onBuffer(buffer, bufferOrEvent.sequenceNumber, -1);
+				Buffer networkBuffer = new NetworkBuffer(memSeg, FreeingBufferRecycler.INSTANCE, false, receivedSize);
+				inputChannel.onBuffer(networkBuffer, bufferOrEvent.sequenceNumber, -1);
 
-				final AbstractEvent event = EventSerializer.fromBuffer(buffer, getClass().getClassLoader());
+				final AbstractEvent event = EventSerializer.fromBuffer(bufferOrEvent.getResponseReadonlySlice(), getClass().getClassLoader());
 				if (event.getClass()==EndOfPartitionEvent.class){
+					LOG.info("Received EndOfPartitionEvent ");
 					finished[0]=true;
 				}
 			}
 		} finally {
-			if (releaseNettyBuffer) {
-				bufferOrEvent.releaseBuffer();
-			}
+//			if (releaseNettyBuffer) { RDMA code does not have a copy, so this buffer should be release after processing
+			// by the serializer.
+//				bufferOrEvent.releaseBuffer();
+//			}
 		}
 	}
 }
