@@ -671,7 +671,7 @@ public abstract class NettyMessage {
 
 	static class CloseRequest extends NettyMessage {
 
-		private static final byte ID = 5;
+		public static final byte ID = 5;
 
 		CloseRequest() {
 		}

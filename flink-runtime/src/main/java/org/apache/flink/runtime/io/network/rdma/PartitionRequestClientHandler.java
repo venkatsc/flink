@@ -228,7 +228,7 @@ class PartitionRequestClientHandler {
 				Buffer networkBuffer = new NetworkBuffer(memSeg, FreeingBufferRecycler.INSTANCE, false, receivedSize);
 				inputChannel.onBuffer(networkBuffer, bufferOrEvent.sequenceNumber, -1);
 
-				final AbstractEvent event = EventSerializer.fromBuffer(bufferOrEvent.getResponseReadonlySlice(), getClass().getClassLoader());
+				final AbstractEvent event = EventSerializer.fromBuffer(networkBuffer, getClass().getClassLoader());
 				if (event.getClass()==EndOfPartitionEvent.class){
 					LOG.info("Received EndOfPartitionEvent ");
 					finished[0]=true;

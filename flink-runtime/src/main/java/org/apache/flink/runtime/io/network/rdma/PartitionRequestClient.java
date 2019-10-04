@@ -39,6 +39,8 @@ package org.apache.flink.runtime.io.network.rdma;
 import org.apache.flink.runtime.event.TaskEvent;
 import org.apache.flink.runtime.io.network.ConnectionID;
 import org.apache.flink.runtime.io.network.PartitionRequestClientIf;
+import org.apache.flink.runtime.io.network.api.EndOfPartitionEvent;
+import org.apache.flink.runtime.io.network.api.serialization.EventSerializer;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
 import org.apache.flink.runtime.io.network.buffer.NetworkBuffer;
 import org.apache.flink.runtime.io.network.netty.exception.LocalTransportException;
@@ -272,7 +274,7 @@ class PartitionReaderClient implements Runnable {
 			try {
 //			for (int i=0;i<takeEventsCount;i++) {
 				IbvWC wc = clientEndpoint.getWcEvents().take();
-				LOG.info("Took completion event with work id {} ", wc.getWr_id());
+//				LOG.info("Took completion event with work id {} ", wc.getWr_id());
 				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 						LOG.error("Receive posting failed. reposting new receive request");
@@ -293,6 +295,9 @@ class PartitionReaderClient implements Runnable {
 							case NettyMessage.BufferResponse.ID:
 								clientHandler.decodeMsg(NettyMessage.BufferResponse.readFrom(receiveBuffer), false, clientEndpoint, inputChannel,finished);
 								break;
+							case NettyMessage.CloseRequest.ID:
+								LOG.info("closing on client side upon close request. Something might have gone wrong on server (reader released etc)");
+								clientHandler.decodeMsg(EventSerializer.toBuffer(EndOfPartitionEvent.INSTANCE),false, clientEndpoint, inputChannel,finished);
 							default:
 								LOG.error(" Un-identified request type " + ID);
 						}

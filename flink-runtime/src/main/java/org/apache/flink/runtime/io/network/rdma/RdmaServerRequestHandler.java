@@ -75,15 +75,15 @@ public class RdmaServerRequestHandler implements Runnable {
 		IOException,
 		InterruptedException {
 		InputChannel.BufferAndAvailability next = null;
-		while (true) {
+		while (!reader.isReleased()) {
 			next = reader.getNextBuffer();
 			if (next == null) {
 				if (!reader.isReleased()) {
 					continue;
 				}
 				Throwable cause = reader.getFailureCause();
-				LOG.info("Sending error message ",cause);
 				if (cause != null) {
+					LOG.info("Sending error message ",cause);
 					NettyMessage.ErrorResponse msg = new NettyMessage.ErrorResponse(
 						new ProducerFailedException(cause),
 						reader.getReceiverId());
@@ -108,6 +108,7 @@ public class RdmaServerRequestHandler implements Runnable {
 				return msg;
 			}
 		}
+		return null;
 	}
 
 	private class HandleClientConnection implements Runnable {
@@ -166,15 +167,19 @@ public class RdmaServerRequestHandler implements Runnable {
 								}
 
 								NettyMessage response = readPartition(partitionRequest, reader);
+								if (response==null){
+									// Reader close
+									response = new NettyMessage.CloseRequest();
+								}
 							if (response instanceof NettyMessage.BufferResponse) {
 								NettyMessage.BufferResponse tmpResp = (NettyMessage.BufferResponse)
 									response;
 								LOG.error(" Sending partition with seq. number: " + tmpResp.sequenceNumber + " receiver Id " + tmpResp.receiverId);
 
 							}else{
-								LOG.info("skip: sending error message");
+								LOG.info("skip: sending error message/close request");
 							}
-								response.write(bufferPool); // creates the header info
+
 
 //								clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
 								clientEndpoint.getReceiveBuffer().clear();
@@ -183,6 +188,7 @@ public class RdmaServerRequestHandler implements Runnable {
 
 								// hold references of the response untill the send completes
 								if (response instanceof NettyMessage.BufferResponse) {
+									response.write(bufferPool); // creates the header info
 									RdmaSendReceiveUtil.postSendReqForBufferResponse(clientEndpoint, ++workRequestId,(NettyMessage.BufferResponse)response);
 									inFlight.put(workRequestId,(NettyMessage.BufferResponse) response);
 								}else{
