@@ -186,7 +186,7 @@ class PartitionRequestClientHandler {
 				if (bufferOrEvent.getSizeOfRetainedSlice() == 0) {
 					inputChannel.onEmptyBuffer(bufferOrEvent.sequenceNumber, -1);
 				}else {
-					inputChannel.onBuffer(bufferOrEvent.getResponseReadonlySlice(), bufferOrEvent.sequenceNumber, -1);
+					inputChannel.onBuffer(bufferOrEvent.getResponseReadonlySlice(), bufferOrEvent.sequenceNumber, bufferOrEvent.backlog);
 					LOG.info("onBuffer finished " + bufferOrEvent.sequenceNumber + " receiver id " + bufferOrEvent.receiverId);
 				}
 				//boolean readFinished= false;

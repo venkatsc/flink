@@ -519,14 +519,6 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 					return;
 				}
 
-//				if (expectedSequenceNumber==sequenceNumber+1){
-//					// For some weird reason Disni is reading some requests twice
-//					// For example, if we are expecting 47 and got 46, it is most likely already seen
-//					// because we reach to 47 only upon seeing 46!
-//					LOG.info("Ignore this buffer, it is being read twice!! expectedSequenceNumber {} given {}",expectedSequenceNumber,sequenceNumber);
-//					return;
-//				}
-
 				if (expectedSequenceNumber != sequenceNumber) {
 					onError(new BufferReorderingException(expectedSequenceNumber, sequenceNumber,this));
 					return;
