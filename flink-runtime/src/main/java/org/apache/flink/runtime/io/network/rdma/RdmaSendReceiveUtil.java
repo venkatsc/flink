@@ -38,7 +38,7 @@ import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel
 public class RdmaSendReceiveUtil {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaSendReceiveUtil.class);
 
-	public static void postSendReqForBufferResponse(RdmaActiveEndpoint endpoint, int workReqId,NettyMessage.BufferResponse response) throws IOException {
+	public static void postSendReqForBufferResponse(RdmaActiveEndpoint endpoint, long workReqId,NettyMessage.BufferResponse response) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
@@ -85,7 +85,7 @@ public class RdmaSendReceiveUtil {
 		}
 	}
 
-	public static void postSendReq(RdmaActiveEndpoint endpoint, int workReqId) throws IOException {
+	public static void postSendReq(RdmaActiveEndpoint endpoint, long workReqId) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
@@ -137,7 +137,7 @@ public class RdmaSendReceiveUtil {
 		}
 	}
 
-	public static void postReceiveReq(RdmaActiveEndpoint endpoint, int workReqId) throws IOException {
+	public static void postReceiveReq(RdmaActiveEndpoint endpoint, long workReqId) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 //			LOG.info("posting server receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
@@ -176,7 +176,7 @@ public class RdmaSendReceiveUtil {
 		}
 	}
 
-	public static void postReceiveReqWithChannelBuf(RdmaActiveEndpoint endpoint, int workReqId,ByteBuf buffer) throws IOException {
+	public static void postReceiveReqWithChannelBuf(RdmaActiveEndpoint endpoint, long workReqId,ByteBuf buffer) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleClientEndpoint) {
 //			LOG.info("posting client receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());

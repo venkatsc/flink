@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.flink.runtime.io.network.NetworkSequenceViewReader;
 import org.apache.flink.runtime.io.network.partition.BufferAvailabilityListener;
@@ -51,7 +52,7 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 
 	private int sequenceNumber = -1;
 	private int availableSeqNumber=-1; // counts how many data available notifications raised.
-
+	private int credit= 0;
 	private boolean isRegisteredAvailable;
 
 	SequenceNumberingViewReader(InputChannelID receiverId) {
@@ -82,7 +83,15 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 	}
 
 	@Override
-	public void addCredit(int creditDeltas) {
+	public void addCredit(int credit) {
+		this.credit=credit;
+	}
+
+	public void decrementCredit(){
+		this.credit--;
+	}
+	public boolean hasCredit(){
+		return credit>0 ;
 	}
 
 	@Override
@@ -159,6 +168,7 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 			", receiverId=" + receiverId +
 			", sequenceNumber=" + sequenceNumber +
 			", isRegisteredAsAvailable=" + isRegisteredAvailable +
+			", credit="+credit+
 			'}';
 	}
 }

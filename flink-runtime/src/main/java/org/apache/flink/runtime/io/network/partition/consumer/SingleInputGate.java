@@ -593,8 +593,8 @@ public class SingleInputGate implements InputGate {
 		// we re-add it in case it has more data, because in that case no "non-empty" notification
 		// will come for that channel
 		final Buffer buffer = result.get().buffer();
-		LOG.debug("Received the buffer? {}, is more available? {} on channel {}", buffer.isBuffer(),result.get().moreAvailable(),
-		currentChannel);
+//		LOG.debug("Received the buffer? {}, is more available? {} on channel {}", buffer.isBuffer(),result.get().moreAvailable(),
+//		currentChannel);
 		if (result.get().moreAvailable()) {
 			queueChannel(currentChannel);
 			moreAvailable = true;

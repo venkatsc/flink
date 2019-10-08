@@ -54,6 +54,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.SocketAddress;
+import java.util.ArrayDeque;
+import java.util.concurrent.ArrayBlockingQueue;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -194,6 +196,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 	}
 
 	public void notifyCreditAvailable(RemoteInputChannel inputChannel) {
+		LOG.info("Credit available notification received on channel {}",inputChannel);
 //		clientHandler.notifyCreditAvailable(inputChannel);
 	}
 
@@ -238,6 +241,8 @@ class PartitionReaderClient implements Runnable {
 	private int delayMs;
 	private final RdmaShuffleClientEndpoint clientEndpoint;
 	private final PartitionRequestClientHandler clientHandler;
+	ArrayDeque<ByteBuf> receivedBuffers = new ArrayDeque<>();
+	private long workRequestId;
 
 	public PartitionReaderClient(final ResultPartitionID partitionId,
 								 final int subpartitionIndex,
@@ -252,34 +257,68 @@ class PartitionReaderClient implements Runnable {
 		this.clientEndpoint = clientEndpoint;
 	}
 
+	private void postBuffers(int credit) throws IOException {
+		for (int c=0;c<credit;c++){
+			ByteBuf receiveBuffer = (NetworkBuffer)inputChannel.getBufferProvider().requestBuffer();
+			receivedBuffers.addLast(receiveBuffer);
+			RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint, ++workRequestId,receiveBuffer);
+		}
+	}
+
 	@Override
 	public void run() {
-		int i = 0, workRequestId = 0;
+		int i = 0;
 		boolean[] finished = new boolean[1];
-		final NettyMessage.PartitionRequest msg = new NettyMessage.PartitionRequest(
+		NettyMessage msg = new NettyMessage.PartitionRequest(
 			partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
 		ByteBuf buf;
-		ByteBuf receiveBuffer;
+		// given the number of buffers configured for network low, it is set to 10 but should be configurable.
+		int availableCredit=inputChannel.getInitialCredit();
 		try {
-			receiveBuffer = (NetworkBuffer)inputChannel.getBufferProvider().requestBuffer();
-			RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint, ++workRequestId,receiveBuffer);
+			postBuffers(availableCredit);
 			buf = msg.write(clientEndpoint.getNettyBufferpool());
 			clientEndpoint.getSendBuffer().put(buf.nioBuffer());
 			RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
-		} catch (IOException ioe) {
+		} catch (Exception ioe) {
 			LOG.error("Failed to serialize partition request");
 			return;
 		}
 		do {
 			try {
+				// TODO: send credit if credit is reached zero
 //			for (int i=0;i<takeEventsCount;i++) {
+				if (availableCredit==0){
+					if (inputChannel.getUnannouncedCredit()>0) {
+						availableCredit = inputChannel.getAndResetUnannouncedCredit();
+						LOG.info("Adding credit: {} on channel {}",availableCredit,inputChannel);
+						postBuffers(availableCredit);
+						msg = new NettyMessage.AddCredit(
+							inputChannel.getPartitionId(),
+							availableCredit,
+							inputChannel.getInputChannelId());
+						clientEndpoint.getSendBuffer().put(msg.write(clientEndpoint.getNettyBufferpool()).nioBuffer());
+						RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+					}else{
+//						LOG.info("No credit available on channel {}",availableCredit,inputChannel);
+						continue;
+					}
+				}
 				IbvWC wc = clientEndpoint.getWcEvents().take();
 //				LOG.info("Took completion event with work id {} ", wc.getWr_id());
 				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 						LOG.error("Receive posting failed. reposting new receive request");
 //						RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
-					} else { // first receive succeeded. Read the data and repost the next message
+					} else {
+						// InfiniBand completes requests in FIFO, so we should have first buffer filled with the data
+						ByteBuf receiveBuffer = receivedBuffers.pollFirst();
+//						if (receiveBuffer.refCnt()==2) {
+//							receiveBuffer.release();
+//						}else if (receiveBuffer.refCnt()>2){
+//							LOG.info("Receive buffer ref count {}",receiveBuffer.refCnt());
+//						}
+						availableCredit--;
+						// first receive succeeded. Read the data and repost the next message
 						// since RDMA writes to the direct memory, receiver buffer indexes starts at 0
 						// resulting in IndexOutOfBoundsException. To make it work, we need to set index to
 						// max segment size
@@ -294,20 +333,23 @@ class PartitionReaderClient implements Runnable {
 						switch (ID) {
 							case NettyMessage.BufferResponse.ID:
 								clientHandler.decodeMsg(NettyMessage.BufferResponse.readFrom(receiveBuffer), false, clientEndpoint, inputChannel,finished);
+//								int refCount= receiveBuffer.refCnt();
 								break;
 							case NettyMessage.CloseRequest.ID:
 								LOG.info("closing on client side upon close request. Something might have gone wrong on server (reader released etc)");
 								clientHandler.decodeMsg(EventSerializer.toBuffer(EndOfPartitionEvent.INSTANCE),false, clientEndpoint, inputChannel,finished);
 							default:
-								LOG.error(" Un-identified request type " + ID);
+								LOG.error(" Un-identified response type " + ID);
 						}
-						receiveBuffer = (ByteBuf)inputChannel.getBufferProvider().requestBuffer();
+//						receiveBuffer = (ByteBuf)inputChannel.getBufferProvider().requestBuffer();
 //						clientEndpoint.getReceiveBuffer().clear();
-						RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint, ++workRequestId,receiveBuffer);
+//						RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint, ++workRequestId,receiveBuffer);
 						//Post next request
-						clientEndpoint.getSendBuffer().clear();
-						clientEndpoint.getSendBuffer().put(buf.nioBuffer());
-						RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+//						clientEndpoint.getSendBuffer().clear();
+
+						// TODO: send credit
+//						clientEndpoint.getSendBuffer().put(buf.nioBuffer());
+//						RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
 					}
 				} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
@@ -315,6 +357,9 @@ class PartitionReaderClient implements Runnable {
 //						RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
 					}
 					clientEndpoint.getSendBuffer().clear();
+//					if (buf.refCnt()>1) {
+//						buf.release();
+//					}
 					// Send succeed does not require any action
 				} else {
 					LOG.error("failed to match any condition " + wc.getOpcode());
@@ -361,4 +406,3 @@ class PartitionReaderClient implements Runnable {
 			clientEndpoint.getEndpointStr() + " remote channel " + inputChannel;
 	}
 }
-

@@ -199,7 +199,13 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 			next = receivedBuffers.poll();
 			moreAvailable = !receivedBuffers.isEmpty();
 		}
-
+//		int refCount = ((NetworkBuffer)next).refCnt();
+//		if (refCount > 1){
+//			LOG.error("Releaseing unwanted refcount. MoreRefCount on buffer {} count {}",next,refCount);
+//			for(int i=1;i<refCount;i++){
+//				((NetworkBuffer) next).release();
+//			}
+//		}
 		numBytesIn.inc(next.getSizeUnsafe());
 		numBuffersIn.inc();
 		return Optional.of(new BufferAndAvailability(next, moreAvailable, getSenderBacklog()));
@@ -525,7 +531,6 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 					onError(new BufferReorderingException(expectedSequenceNumber, sequenceNumber,this));
 					return;
 				}
-
 				wasEmpty = receivedBuffers.isEmpty();
 				receivedBuffers.add(buffer);
 				recycleBuffer = false;

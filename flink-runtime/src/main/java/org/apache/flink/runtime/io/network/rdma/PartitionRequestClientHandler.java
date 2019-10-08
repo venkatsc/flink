@@ -185,28 +185,26 @@ class PartitionRequestClientHandler {
 				// IndexOutOfBoundsException.
 				if (bufferOrEvent.getSizeOfRetainedSlice() == 0) {
 					inputChannel.onEmptyBuffer(bufferOrEvent.sequenceNumber, -1);
+				}else {
+					inputChannel.onBuffer(bufferOrEvent.getResponseReadonlySlice(), bufferOrEvent.sequenceNumber, -1);
+					LOG.info("onBuffer finished " + bufferOrEvent.sequenceNumber + " receiver id " + bufferOrEvent.receiverId);
 				}
-				BufferProvider bufferProvider = inputChannel.getBufferProvider();
-
-				boolean readFinished= false;
-				do {
-					Buffer buffer = bufferProvider.requestBuffer();
-					if (buffer != null) {
-//						nettyBuffer.readBytes(buffer.asByteBuf(), receivedSize);
-
-						inputChannel.onBuffer(bufferOrEvent.getResponseReadonlySlice(), bufferOrEvent.sequenceNumber, -1);
-						LOG.info("onBuffer finished "+bufferOrEvent.sequenceNumber +" receiver id "+bufferOrEvent.receiverId);
-						readFinished = true;
-					}
-//					else if (bufferListener.waitForBuffer(bufferProvider, bufferOrEvent)) {
-//						releaseNettyBuffer = false;
-//
-//						return false;
+				//boolean readFinished= false;
+//				do {
+//					Buffer buffer = bufferProvider.requestBuffer();
+//					if (buffer != null) {
+//						nettyBuffer.readBytes(buffer.asByteBuf(), receivedSize)
+//						readFinished = true;
 //					}
-					else if (bufferProvider.isDestroyed()) {
-						LOG.info("buffer provider is destroyed");
-					}
-				} while (!readFinished);
+////					else if (bufferListener.waitForBuffer(bufferProvider, bufferOrEvent)) {
+////						releaseNettyBuffer = false;
+////
+////						return false;
+////					}
+//					else if (bufferProvider.isDestroyed()) {
+//						LOG.info("buffer provider is destroyed");
+//					}
+//				} while (!readFinished);
 			} else {
 				LOG.info("in event");
 

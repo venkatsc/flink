@@ -80,14 +80,14 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 
 	@Override
 	public void dispatchCqEvent(IbvWC wc) throws IOException {
-			int newOpCode = wc.getOpcode();
-			IbvWC old = lastEvent.get();
-			if(old == null){
-				lastEvent.set(wc.clone());
-			} else if (old.getOpcode() == newOpCode){
-				throw new RuntimeException("*******server got "+ IbvWC.IbvWcOpcode.valueOf(newOpCode) +" event twice in a row. last id = "+old.getWr_id()+", current id "+old.getWr_id()+"***********");
-			}
-			lastEvent.set(wc.clone());
+//			int newOpCode = wc.getOpcode();
+//			IbvWC old = lastEvent.get();
+//			if(old == null){
+//				lastEvent.set(wc.clone());
+//			} else if (old.getOpcode() == newOpCode){
+//				throw new RuntimeException("*******client got "+ IbvWC.IbvWcOpcode.valueOf(newOpCode) +" event twice in a row. last id = "+old.getWr_id()+", current id "+old.getWr_id()+"***********");
+//			}
+//			lastEvent.set(wc.clone());
 			wcEvents.add(wc);
 	}
 
