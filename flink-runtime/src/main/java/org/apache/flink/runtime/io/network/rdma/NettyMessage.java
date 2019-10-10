@@ -335,7 +335,8 @@ public abstract class NettyMessage {
 		}
 
 		void releaseBuffer() {
-			if (!bufferReleased && buffer != null) {
+			if (!bufferReleased && buffer != null && buffer.refCnt()>1) {
+
 				buffer.release();
 			}
 		}
