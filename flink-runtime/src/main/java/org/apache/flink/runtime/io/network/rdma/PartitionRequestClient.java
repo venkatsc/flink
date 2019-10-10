@@ -259,9 +259,14 @@ class PartitionReaderClient implements Runnable {
 
 	private void postBuffers(int credit) throws IOException {
 		for (int c=0;c<credit;c++){
-			ByteBuf receiveBuffer = (NetworkBuffer)inputChannel.getBufferProvider().requestBuffer();
-			receivedBuffers.addLast(receiveBuffer);
-			RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint, ++workRequestId,receiveBuffer);
+//			ByteBuf receiveBuffer = (NetworkBuffer)inputChannel.getBufferProvider().requestBuffer();
+			ByteBuf receiveBuffer = (NetworkBuffer)inputChannel.requestBuffer();
+			if (receiveBuffer!=null){
+				receivedBuffers.addLast(receiveBuffer);
+				RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint, ++workRequestId,receiveBuffer);
+			}else {
+				LOG.error("Buffer from the channel is null");
+			}
 		}
 	}
 
