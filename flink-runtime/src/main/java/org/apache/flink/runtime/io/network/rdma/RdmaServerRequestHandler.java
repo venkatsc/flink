@@ -126,7 +126,7 @@ public class RdmaServerRequestHandler implements Runnable {
 				boolean clientClose = false;
 				while (!clientClose) {
 					for (NetworkSequenceViewReader reader: readers.values()){
-						if (((SequenceNumberingViewReader)reader).hasCredit()&&reader.isRegisteredAsAvailable()) {
+						while (((SequenceNumberingViewReader)reader).hasCredit()&&reader.isRegisteredAsAvailable()) {
 							NettyMessage response = readPartition(reader);
 							((SequenceNumberingViewReader)reader).decrementCredit();
 							if (response == null) {
@@ -141,8 +141,8 @@ public class RdmaServerRequestHandler implements Runnable {
 								LOG.info("skip: sending error message/close request");
 							}
 //								clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
-							clientEndpoint.getReceiveBuffer().clear();
-							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
+//							clientEndpoint.getReceiveBuffer().clear();
+//							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
 							// receive
 
 							// hold references of the response untill the send completes
@@ -192,6 +192,8 @@ public class RdmaServerRequestHandler implements Runnable {
 									reader.addCredit(partitionRequest.credit);
 									readers.put(partitionRequest.receiverId, reader);
 								}
+								// we need to post receive for next message. for example credit
+								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 								// TODO(venkat): do something better here, we should not poll reader
 							} else if (msgClazz == NettyMessage.TaskEventRequest.class) {
 								NettyMessage.TaskEventRequest request = (NettyMessage.TaskEventRequest) clientRequest;
