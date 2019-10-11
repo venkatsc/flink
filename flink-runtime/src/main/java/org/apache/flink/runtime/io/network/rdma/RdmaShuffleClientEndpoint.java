@@ -152,7 +152,7 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 						LOG.error("Receive posting failed. reposting new receive request");
-						RdmaSendReceiveUtil.postReceiveReq(this, ++workRequestId);
+//						RdmaSendReceiveUtil.postReceiveReq(this, ++workRequestId);
 					} else { // first receive succeeded. Read the data and repost the next message
 						this.getReceiveBuffer().getInt(); // discard frame length
 						this.getReceiveBuffer().getInt(); // discard magic number

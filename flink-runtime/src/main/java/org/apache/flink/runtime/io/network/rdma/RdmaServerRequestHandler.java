@@ -126,34 +126,37 @@ public class RdmaServerRequestHandler implements Runnable {
 				boolean clientClose = false;
 				while (!clientClose) {
 					for (NetworkSequenceViewReader reader: readers.values()){
-						while (((SequenceNumberingViewReader)reader).hasCredit()&&reader.isRegisteredAsAvailable()) {
-							NettyMessage response = readPartition(reader);
-							((SequenceNumberingViewReader)reader).decrementCredit();
-							if (response == null) {
-								// Reader close
-								response = new NettyMessage.CloseRequest();
-							}
-							if (response instanceof NettyMessage.BufferResponse) {
-								NettyMessage.BufferResponse tmpResp = (NettyMessage.BufferResponse)
-									response;
-								LOG.error(" Sending partition with seq. number: " + tmpResp.sequenceNumber + " receiver Id " + tmpResp.receiverId);
-							} else {
-								LOG.info("skip: sending error message/close request");
-							}
+						while (((SequenceNumberingViewReader)reader).hasCredit()) {
+							if (reader.isRegisteredAsAvailable()) {
+								NettyMessage response = readPartition(reader);
+								((SequenceNumberingViewReader) reader).decrementCredit();
+								if (response == null) {
+									// Reader close
+									response = new NettyMessage.CloseRequest();
+								}
+								if (response instanceof NettyMessage.BufferResponse) {
+									NettyMessage.BufferResponse tmpResp = (NettyMessage.BufferResponse)
+										response;
+									LOG.error(" Sending partition with seq. number: " + tmpResp.sequenceNumber + " receiver Id " + tmpResp.receiverId);
+
+								} else {
+									LOG.info("skip: sending error message/close request");
+								}
 //								clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
 //							clientEndpoint.getReceiveBuffer().clear();
 //							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
-							// receive
+								// receive
 
-							// hold references of the response untill the send completes
-							if (response instanceof NettyMessage.BufferResponse) {
-								response.write(bufferPool); // creates the header info
-								RdmaSendReceiveUtil.postSendReqForBufferResponse(clientEndpoint, ++workRequestId, (NettyMessage.BufferResponse) response);
+								// hold references of the response untill the send completes
+								if (response instanceof NettyMessage.BufferResponse) {
+									response.write(bufferPool); // creates the header info
+									RdmaSendReceiveUtil.postSendReqForBufferResponse(clientEndpoint, ++workRequestId, (NettyMessage.BufferResponse) response);
 
-								inFlight.put(workRequestId, (NettyMessage.BufferResponse) response);
-							} else {
-								clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
-								RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+									inFlight.put(workRequestId, (NettyMessage.BufferResponse) response);
+								} else {
+									clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
+									RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+								}
 							}
 						}
 					}
@@ -162,7 +165,7 @@ public class RdmaServerRequestHandler implements Runnable {
 					if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 						if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 							LOG.error("Receive posting failed. reposting new receive request");
-							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
+//							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 						} else { // first receive succeeded. Read the data and repost the next message
 							LOG.info("Received message from "+getEndpointStr(clientEndpoint));
 							NettyMessage clientRequest = decodeMessageFromBuffer(clientEndpoint.getReceiveBuffer());

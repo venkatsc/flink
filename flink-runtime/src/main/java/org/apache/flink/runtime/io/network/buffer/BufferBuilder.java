@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.io.network.buffer;
 
 import org.apache.flink.core.memory.MemorySegment;
+import org.apache.flink.runtime.io.network.rdma.RdmaConnectionManager;
 
 import javax.annotation.concurrent.NotThreadSafe;
 import javax.annotation.concurrent.ThreadSafe;
@@ -119,7 +120,7 @@ public class BufferBuilder {
 	}
 
 	public int getMaxCapacity() {
-		return memorySegment.size();
+		return memorySegment.size() - RdmaConnectionManager.DATA_MSG_HEADER_SIZE;
 	}
 
 	/**

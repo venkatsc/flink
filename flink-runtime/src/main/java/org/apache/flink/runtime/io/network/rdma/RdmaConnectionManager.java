@@ -33,7 +33,7 @@ import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
 
 public class RdmaConnectionManager implements ConnectionManager {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaConnectionManager.class);
-
+    public static final int DATA_MSG_HEADER_SIZE = 39;
 	private final RdmaServer server;
 	private final NettyConfig rdmaConfig;
 

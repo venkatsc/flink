@@ -425,7 +425,9 @@ public abstract class NettyMessage {
 			boolean moreAvailable = buffer.readBoolean();
 			int size = buffer.readInt();
 
-			Buffer retainedSlice = ((NetworkBuffer) buffer).readOnlySlice(((NetworkBuffer) buffer).getReaderIndex(),
+//			Buffer retainedSlice = ((NetworkBuffer) buffer).readOnlySlice(((NetworkBuffer) buffer).getReaderIndex(),
+//				size);
+			Buffer retainedSlice = ((NetworkBuffer) buffer).readOnlySlice(RdmaConnectionManager.DATA_MSG_HEADER_SIZE,
 				size);
 			return new BufferResponse(retainedSlice, isBuffer, sequenceNumber, receiverId, backlog, moreAvailable);
 		}
