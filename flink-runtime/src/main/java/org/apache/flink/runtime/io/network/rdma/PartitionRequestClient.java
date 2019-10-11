@@ -332,19 +332,21 @@ class PartitionReaderClient implements Runnable {
 						int magic = receiveBuffer.readInt();
 						if (magic!= NettyMessage.MAGIC_NUMBER){
 							LOG.error("Magic number mistmatch expected: {} got: {} on receiver {}",NettyMessage.MAGIC_NUMBER,magic,inputChannel.getInputChannelId());
-							// discard magic number
-						}
-						byte ID = receiveBuffer.readByte();
-						switch (ID) {
-							case NettyMessage.BufferResponse.ID:
-								clientHandler.decodeMsg(NettyMessage.BufferResponse.readFrom(receiveBuffer), false, clientEndpoint, inputChannel,finished);
+							receiveBuffer.release();
+						}else {
+							byte ID = receiveBuffer.readByte();
+							switch (ID) {
+								case NettyMessage.BufferResponse.ID:
+									clientHandler.decodeMsg(NettyMessage.BufferResponse.readFrom(receiveBuffer), false, clientEndpoint, inputChannel, finished);
 //								int refCount= receiveBuffer.refCnt();
-								break;
-							case NettyMessage.CloseRequest.ID:
-								LOG.info("closing on client side upon close request. Something might have gone wrong on server (reader released etc)");
-								clientHandler.decodeMsg(EventSerializer.toBuffer(EndOfPartitionEvent.INSTANCE),false, clientEndpoint, inputChannel,finished);
-							default:
-								LOG.error(" Un-identified response type " + ID);
+									break;
+								case NettyMessage.CloseRequest.ID:
+									LOG.info("closing on client side upon close request. Something might have gone wrong on server (reader released etc)");
+
+									clientHandler.decodeMsg(EventSerializer.toBuffer(EndOfPartitionEvent.INSTANCE), false, clientEndpoint, inputChannel, finished);
+								default:
+									LOG.error(" Un-identified response type " + ID);
+							}
 						}
 //						receiveBuffer = (ByteBuf)inputChannel.getBufferProvider().requestBuffer();
 //						clientEndpoint.getReceiveBuffer().clear();

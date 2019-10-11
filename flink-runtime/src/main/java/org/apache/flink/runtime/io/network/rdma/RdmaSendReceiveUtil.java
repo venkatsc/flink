@@ -58,14 +58,14 @@ public class RdmaSendReceiveUtil {
 				sendSGE1.setLkey(clientEndpoint.getWholeMR().getLkey());
 				sges.add(sendSGE1);
 				ByteBuf buf1 =response.getTempBuffer();
-				LOG.info("sending temp buffer readable:{} capacity:{}",buf1.readableBytes(),buf1.capacity());
+//				LOG.info("sending temp buffer readable:{} capacity:{}",buf1.readableBytes(),buf1.capacity());
 			}else{
 				ReadOnlySlicedNetworkBuffer buffer = (ReadOnlySlicedNetworkBuffer) response.getNettyBuffer();
 				sendSGE1.setAddr(buffer.getMemorySegment().getAddress() + buffer.getMemorySegmentOffset());
 				sendSGE1.setLength(buffer.writerIndex());
 				sendSGE1.setLkey(clientEndpoint.getWholeMR().getLkey());
 				sges.add(sendSGE1);
-				LOG.info("sending network buffer readable:{} capacity:{} writer index: {} getsize: {}",buffer.readableBytes(),buffer.capacity(),buffer.writerIndex(),buffer.getSize());
+//				LOG.info("sending network buffer readable:{} capacity:{} writer index: {} getsize: {}",buffer.readableBytes(),buffer.capacity(),buffer.writerIndex(),buffer.getSize());
 			}
 
 			// Create send Work Request (WR)
