@@ -10,6 +10,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.Unpooled;
 
@@ -128,44 +131,9 @@ public class RdmaServerRequestHandler implements Runnable {
 					.getDstAddr());
 				boolean clientClose = false;
 				while (!clientClose) {
-					for (NetworkSequenceViewReader reader: readers.values()){
-						while (((SequenceNumberingViewReader)reader).hasCredit()) {
-							if (reader.isRegisteredAsAvailable()) {
-								NettyMessage response = readPartition(reader);
-								if (response == null) {
-									// False reader available is set, exit the reader here and write to the
-									// next reader with credit
-									break;
-//									response = new NettyMessage.CloseRequest();
-								}
-								((SequenceNumberingViewReader) reader).decrementCredit();
-								if (response instanceof NettyMessage.BufferResponse) {
-									NettyMessage.BufferResponse tmpResp = (NettyMessage.BufferResponse)
-										response;
-									LOG.error(" Sending partition with seq. number: " + tmpResp.sequenceNumber + " receiver Id " + tmpResp.receiverId);
-
-								} else {
-									LOG.info("skip: sending error message/close request");
-								}
-//								clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
-//							clientEndpoint.getReceiveBuffer().clear();
-//							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
-								// receive
-
-								// hold references of the response untill the send completes
-								if (response instanceof NettyMessage.BufferResponse) {
-									response.write(bufferPool); // creates the header info
-									RdmaSendReceiveUtil.postSendReqForBufferResponse(clientEndpoint, ++workRequestId, (NettyMessage.BufferResponse) response);
-
-									inFlight.put(workRequestId, (NettyMessage.BufferResponse) response);
-								} else {
-									clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
-									RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
-								}
-							}
-						}
-					}
-
+					// we need to do writing in seperate thread, otherwise buffers may not be release on
+					// completion events
+					new Thread(new RDMAWriter(readers,clientEndpoint)).start();
 					IbvWC wc = clientEndpoint.getWcEvents().take();
 					if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 						if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
@@ -241,8 +209,10 @@ public class RdmaServerRequestHandler implements Runnable {
 							LOG.error("Server:Send failed. reposting new send request request"+getEndpointStr(clientEndpoint));
 //							RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
 						}
-
-						NettyMessage.BufferResponse response = inFlight.remove(wc.getWr_id());
+						NettyMessage.BufferResponse response;
+						synchronized (inFlight) {
+							response = inFlight.remove(wc.getWr_id());
+						}
 						if (response !=null) {
 							response.releaseBuffer();
 							response.releaseTempBuf();
@@ -260,6 +230,64 @@ public class RdmaServerRequestHandler implements Runnable {
 				clientEndpoint.close();
 			} catch (Exception e) {
 				LOG.error("error handling client request ", e);
+			}
+		}
+	}
+
+	private class RDMAWriter implements Runnable{
+		private Map<InputChannelID, NetworkSequenceViewReader> readers = new HashMap<>();
+		private RdmaShuffleServerEndpoint clientEndpoint;
+		public RDMAWriter(Map<InputChannelID,NetworkSequenceViewReader> readers,RdmaShuffleServerEndpoint clientEndpoint){
+			this.readers= readers;
+			this.clientEndpoint = clientEndpoint;
+		}
+
+		@Override
+		public void run() {
+			if (!clientEndpoint.isClosed()) {
+			try {
+					for (NetworkSequenceViewReader reader : readers.values()) {
+						while (((SequenceNumberingViewReader) reader).hasCredit()) {
+							if (reader.isRegisteredAsAvailable()) {
+								NettyMessage response = readPartition(reader);
+								if (response == null) {
+									// False reader available is set, exit the reader here and write to the
+									// next reader with credit
+									break;
+//									response = new NettyMessage.CloseRequest();
+								}
+								((SequenceNumberingViewReader) reader).decrementCredit();
+								if (response instanceof NettyMessage.BufferResponse) {
+									NettyMessage.BufferResponse tmpResp = (NettyMessage.BufferResponse)
+										response;
+									LOG.error(" Sending partition with seq. number: " + tmpResp.sequenceNumber + " receiver Id " + tmpResp.receiverId);
+
+
+								} else {
+									LOG.info("skip: sending error message/close request");
+								}
+//								clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
+//							clientEndpoint.getReceiveBuffer().clear();
+//							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
+								// receive
+
+								// hold references of the response until the send completes
+								if (response instanceof NettyMessage.BufferResponse) {
+									response.write(bufferPool); // creates the header info
+									RdmaSendReceiveUtil.postSendReqForBufferResponse(clientEndpoint, ++workRequestId, (NettyMessage.BufferResponse) response);
+									synchronized (inFlight) {
+										inFlight.put(workRequestId, (NettyMessage.BufferResponse) response);
+									}
+								} else {
+									clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
+									RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+								}
+							}
+						}
+					}
+				}catch(Exception e){
+					LOG.error("failed to writing out the data ",e);
+				}
 			}
 		}
 	}
