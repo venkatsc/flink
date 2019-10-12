@@ -45,8 +45,13 @@ public class RdmaSendReceiveUtil {
 //			LOG.info("posting server send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge sendSGE = new IbvSge();
-			DirectBuffer buf = (DirectBuffer) response.getHeaderBuf();
-			sendSGE.setAddr(buf.address());
+			response.getHeaderBuf().readInt(); // frame info
+			int magic = response.getHeaderBuf().readInt();
+			if (magic !=NettyMessage.MAGIC_NUMBER){
+				LOG.error("Server sending wrong magic number and it should never happen. Magic: {}",magic);
+			}
+			ByteBuf buf = response.getHeaderBuf();
+			sendSGE.setAddr(buf.memoryAddress());
 			sendSGE.setLength(response.getHeaderBuf().capacity());
 			sendSGE.setLkey(clientEndpoint.getWholeMR().getLkey());
 			sges.add(sendSGE);
@@ -57,7 +62,7 @@ public class RdmaSendReceiveUtil {
 				sendSGE1.setLength(response.getTempBuffer().readableBytes());
 				sendSGE1.setLkey(clientEndpoint.getWholeMR().getLkey());
 				sges.add(sendSGE1);
-				ByteBuf buf1 =response.getTempBuffer();
+//				ByteBuf buf1 =response.getTempBuffer();
 //				LOG.info("sending temp buffer readable:{} capacity:{}",buf1.readableBytes(),buf1.capacity());
 			}else{
 				ReadOnlySlicedNetworkBuffer buffer = (ReadOnlySlicedNetworkBuffer) response.getNettyBuffer();

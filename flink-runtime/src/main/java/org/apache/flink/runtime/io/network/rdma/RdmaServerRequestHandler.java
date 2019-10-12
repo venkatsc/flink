@@ -74,12 +74,12 @@ public class RdmaServerRequestHandler implements Runnable {
 		IOException,
 		InterruptedException {
 		InputChannel.BufferAndAvailability next = null;
-		while (!reader.isReleased()) {
+//		while (!reader.isReleased()) {
 			next = reader.getNextBuffer();
 			if (next == null) {
-				if (!reader.isReleased()) {
-					continue;
-				}
+//				if (!reader.isReleased()) {
+//					continue;
+//				}
 				Throwable cause = reader.getFailureCause();
 				if (cause != null) {
 					LOG.info("Sending error message ",cause);
@@ -87,15 +87,18 @@ public class RdmaServerRequestHandler implements Runnable {
 						new ProducerFailedException(cause),
 						reader.getReceiverId());
 					return msg;
+				}else{
+					// False available is set
+					return null;
 				}
 			} else {
 				// This channel was now removed from the available reader queue.
 				// We re-add it into the queue if it is still available
 				if (next.moreAvailable()) {
-					LOG.info("server more available: true");
+					LOG.info("server more available: true on {}",reader);
 					reader.setRegisteredAsAvailable(true);
 				} else {
-					LOG.info("server more available: false");
+					LOG.info("server more available: false on {}",reader);
 					reader.setRegisteredAsAvailable(false);
 				}
 				LOG.info("Sending BufferResponse message");
@@ -106,8 +109,8 @@ public class RdmaServerRequestHandler implements Runnable {
 					next.buffersInBacklog(), next.moreAvailable());
 				return msg;
 			}
-		}
-		return null;
+//		}
+//		return null;
 	}
 
 	private class HandleClientConnection implements Runnable {
@@ -129,11 +132,13 @@ public class RdmaServerRequestHandler implements Runnable {
 						while (((SequenceNumberingViewReader)reader).hasCredit()) {
 							if (reader.isRegisteredAsAvailable()) {
 								NettyMessage response = readPartition(reader);
-								((SequenceNumberingViewReader) reader).decrementCredit();
 								if (response == null) {
-									// Reader close
-									response = new NettyMessage.CloseRequest();
+									// False reader available is set, exit the reader here and write to the
+									// next reader with credit
+									break;
+//									response = new NettyMessage.CloseRequest();
 								}
+								((SequenceNumberingViewReader) reader).decrementCredit();
 								if (response instanceof NettyMessage.BufferResponse) {
 									NettyMessage.BufferResponse tmpResp = (NettyMessage.BufferResponse)
 										response;

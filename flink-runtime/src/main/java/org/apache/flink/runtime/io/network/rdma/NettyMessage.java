@@ -282,7 +282,7 @@ public abstract class NettyMessage {
 
 		final boolean moreAvailable;
 
-		ByteBuffer headerBuf = null;
+		ByteBuf headerBuf = null;
 
 		private boolean bufferReleased = false;
 
@@ -358,7 +358,7 @@ public abstract class NettyMessage {
 		 *
 		 * @return
 		 */
-		ByteBuffer getHeaderBuf() {
+		ByteBuf getHeaderBuf() {
 			return headerBuf;
 		}
 
@@ -379,16 +379,27 @@ public abstract class NettyMessage {
 
 				// only allocate header buffer - we will combine it with the data buffer below
 //				headerBuf = allocateBuffer(allocator, ID, messageHeaderLength, 0, false);
-				headerBuf = ByteBuffer.allocateDirect(FRAME_HEADER_LENGTH + messageHeaderLength);
-				headerBuf.putInt(FRAME_HEADER_LENGTH + messageHeaderLength);
-				headerBuf.putInt(MAGIC_NUMBER);
-				headerBuf.put(ID);
+//				headerBuf = ByteBuffer.allocateDirect(FRAME_HEADER_LENGTH + messageHeaderLength);
+//				headerBuf.putInt(FRAME_HEADER_LENGTH + messageHeaderLength);
+//				headerBuf.putInt(MAGIC_NUMBER);
+//				headerBuf.put(ID);
+//				receiverId.writeTo(headerBuf);
+//				headerBuf.putInt(sequenceNumber);
+//				headerBuf.putInt(backlog);
+//				headerBuf.put(isBuffer ? (byte) 1 : (byte) 0);
+//				headerBuf.put(moreAvailable ? (byte) 1 : (byte) 0);
+//				headerBuf.putInt(buffer.readableBytes());
+
+				headerBuf = allocator.directBuffer(FRAME_HEADER_LENGTH + messageHeaderLength);
+				headerBuf.writeInt(FRAME_HEADER_LENGTH + messageHeaderLength);
+				headerBuf.writeInt(MAGIC_NUMBER);
+				headerBuf.writeByte(ID);
 				receiverId.writeTo(headerBuf);
-				headerBuf.putInt(sequenceNumber);
-				headerBuf.putInt(backlog);
-				headerBuf.put(isBuffer ? (byte) 1 : (byte) 0);
-				headerBuf.put(moreAvailable ? (byte) 1 : (byte) 0);
-				headerBuf.putInt(buffer.readableBytes());
+				headerBuf.writeInt(sequenceNumber);
+				headerBuf.writeInt(backlog);
+				headerBuf.writeBoolean(isBuffer);
+				headerBuf.writeBoolean(moreAvailable);
+				headerBuf.writeInt(buffer.readableBytes());
 
 				if (!buffer.isDirect()) {
 					bufferTmp = allocator.directBuffer(buffer.readableBytes());

@@ -98,7 +98,7 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 	public void setRegisteredAsAvailable(boolean isRegisteredAvailable) {
 		synchronized (this) {
 			this.isRegisteredAvailable = isRegisteredAvailable;
-			this.notifyAll();
+//			this.notifyAll();
 		}
 	}
 
