@@ -196,7 +196,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 	}
 
 	public void notifyCreditAvailable(RemoteInputChannel inputChannel) {
-		LOG.info("Credit available notification received on channel {}",inputChannel);
+//		LOG.info("Credit available notification received on channel {}",inputChannel);
 //		clientHandler.notifyCreditAvailable(inputChannel);
 	}
 
@@ -257,30 +257,39 @@ class PartitionReaderClient implements Runnable {
 		this.clientEndpoint = clientEndpoint;
 	}
 
-	private void postBuffers(int credit) throws IOException {
+	private int postBuffers(int credit)  {
+		int failed=0;
 		for (int c=0;c<credit;c++){
+			ByteBuf receiveBuffer=null;
+			try {
 //			ByteBuf receiveBuffer = (NetworkBuffer)inputChannel.getBufferProvider().requestBuffer();
-			ByteBuf receiveBuffer = (NetworkBuffer)inputChannel.requestBuffer();
-			if (receiveBuffer!=null){
-				receivedBuffers.addLast(receiveBuffer);
-				RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint, ++workRequestId,receiveBuffer);
-			}else {
-				LOG.error("Buffer from the channel is null");
+				receiveBuffer = (NetworkBuffer) inputChannel.requestBuffer();
+				if (receiveBuffer != null) {
+					RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint, ++workRequestId, receiveBuffer);
+					receivedBuffers.addLast(receiveBuffer);
+				} else {
+					LOG.error("Buffer from the channel is null");
+				}
+			}catch (IOException e){
+				LOG.error("failed posting buffer. current credit {} due to {}",c,e);
+				failed++;
+				receiveBuffer.release();
 			}
 		}
+		return failed;
 	}
 
 	@Override
 	public void run() {
 		int i = 0;
 		boolean[] finished = new boolean[1];
-		NettyMessage msg = new NettyMessage.PartitionRequest(
-			partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
-		ByteBuf buf;
 		// given the number of buffers configured for network low, it is set to 10 but should be configurable.
 		int availableCredit=inputChannel.getInitialCredit();
+		int failed=postBuffers(availableCredit);
+		NettyMessage msg = new NettyMessage.PartitionRequest(
+			partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit()-failed);
+		ByteBuf buf;
 		try {
-			postBuffers(availableCredit);
 			buf = msg.write(clientEndpoint.getNettyBufferpool());
 			clientEndpoint.getSendBuffer().put(buf.nioBuffer());
 			RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
@@ -295,11 +304,11 @@ class PartitionReaderClient implements Runnable {
 				if (availableCredit==0){
 					if (inputChannel.getUnannouncedCredit()>0) {
 						availableCredit = inputChannel.getAndResetUnannouncedCredit();
-						LOG.info("Adding credit: {} on channel {}",availableCredit,inputChannel);
-						postBuffers(availableCredit);
+//						LOG.info("Adding credit: {} on channel {}",availableCredit,inputChannel);
+						failed = postBuffers(availableCredit);
 						msg = new NettyMessage.AddCredit(
 							inputChannel.getPartitionId(),
-							availableCredit,
+							availableCredit-failed,
 							inputChannel.getInputChannelId());
 						clientEndpoint.getSendBuffer().put(msg.write(clientEndpoint.getNettyBufferpool()).nioBuffer());
 						RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);

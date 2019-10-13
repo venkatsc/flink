@@ -85,7 +85,7 @@ public class RdmaServerRequestHandler implements Runnable {
 //				}
 				Throwable cause = reader.getFailureCause();
 				if (cause != null) {
-					LOG.info("Sending error message ",cause);
+//					LOG.info("Sending error message ",cause);
 					NettyMessage.ErrorResponse msg = new NettyMessage.ErrorResponse(
 						new ProducerFailedException(cause),
 						reader.getReceiverId());
@@ -98,13 +98,13 @@ public class RdmaServerRequestHandler implements Runnable {
 				// This channel was now removed from the available reader queue.
 				// We re-add it into the queue if it is still available
 				if (next.moreAvailable()) {
-					LOG.info("server more available: true on {}",reader);
+//					LOG.info("server more available: true on {}",reader);
 					reader.setRegisteredAsAvailable(true);
 				} else {
-					LOG.info("server more available: false on {}",reader);
+//					LOG.info("server more available: false on {}",reader);
 					reader.setRegisteredAsAvailable(false);
 				}
-				LOG.info("Sending BufferResponse message");
+//				LOG.info("Sending BufferResponse message");
 				NettyMessage.BufferResponse msg = new NettyMessage.BufferResponse(
 					next.buffer(),
 					reader.getSequenceNumber(),
@@ -127,20 +127,20 @@ public class RdmaServerRequestHandler implements Runnable {
 		@Override
 		public void run() {
 			try {
-				LOG.info("Server accepted connection src " + clientEndpoint.getSrcAddr() + " dst: " + clientEndpoint
-					.getDstAddr());
+//				LOG.info("Server accepted connection src " + clientEndpoint.getSrcAddr() + " dst: " + clientEndpoint
+//					.getDstAddr());
+				new Thread(new RDMAWriter(readers,clientEndpoint)).start();
 				boolean clientClose = false;
 				while (!clientClose) {
 					// we need to do writing in seperate thread, otherwise buffers may not be release on
 					// completion events
-					new Thread(new RDMAWriter(readers,clientEndpoint)).start();
 					IbvWC wc = clientEndpoint.getWcEvents().take();
 					if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 						if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 							LOG.error("Receive posting failed. reposting new receive request");
 //							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 						} else { // first receive succeeded. Read the data and repost the next message
-							LOG.info("Received message from "+getEndpointStr(clientEndpoint));
+//							LOG.info("Received message from "+getEndpointStr(clientEndpoint));
 							NettyMessage clientRequest = decodeMessageFromBuffer(clientEndpoint.getReceiveBuffer());
 							Class<?> msgClazz = clientRequest.getClass();
 							if (msgClazz == NettyMessage.CloseRequest.class) {
@@ -162,9 +162,9 @@ public class RdmaServerRequestHandler implements Runnable {
 										partitionProvider,
 										partitionRequest.partitionId,
 										partitionRequest.queueIndex);
-									LOG.info("received partition request: " + partitionRequest.receiverId + " with " +
-										"initial credit: " + partitionRequest.credit + "at endpoint: " +
-										getEndpointStr(clientEndpoint));
+//									LOG.info("received partition request: " + partitionRequest.receiverId + " with " +
+//										"initial credit: " + partitionRequest.credit + "at endpoint: " +
+//										getEndpointStr(clientEndpoint));
 									reader.addCredit(partitionRequest.credit);
 									readers.put(partitionRequest.receiverId, reader);
 								}
@@ -196,7 +196,7 @@ public class RdmaServerRequestHandler implements Runnable {
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
 								// receive
 								// TODO (venkat): Handle it
-								LOG.error("Unhandled request type AddCredit");
+//								LOG.error("Unhandled request type AddCredit");
 								// outboundQueue.addCredit(request.receiverId, request.credit);
 							} else {
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
@@ -221,7 +221,7 @@ public class RdmaServerRequestHandler implements Runnable {
 						clientEndpoint.getSendBuffer().clear();
 						// Send succeed does not require any action
 					} else {
-						System.out.println("failed to match any condition " + wc.getOpcode());
+						LOG.error("failed to match any condition " + wc.getOpcode());
 					}
 					// TODO: create requested handler
 				}
@@ -244,7 +244,7 @@ public class RdmaServerRequestHandler implements Runnable {
 
 		@Override
 		public void run() {
-			if (!clientEndpoint.isClosed()) {
+			while (!clientEndpoint.isClosed()) {
 			try {
 					for (NetworkSequenceViewReader reader : readers.values()) {
 						while (((SequenceNumberingViewReader) reader).hasCredit()) {
@@ -261,8 +261,6 @@ public class RdmaServerRequestHandler implements Runnable {
 									NettyMessage.BufferResponse tmpResp = (NettyMessage.BufferResponse)
 										response;
 									LOG.error(" Sending partition with seq. number: " + tmpResp.sequenceNumber + " receiver Id " + tmpResp.receiverId);
-
-
 								} else {
 									LOG.info("skip: sending error message/close request");
 								}
