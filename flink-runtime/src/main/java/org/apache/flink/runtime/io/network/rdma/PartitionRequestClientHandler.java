@@ -187,7 +187,7 @@ class PartitionRequestClientHandler {
 					inputChannel.onEmptyBuffer(bufferOrEvent.sequenceNumber, -1);
 				}else {
 					inputChannel.onBuffer(bufferOrEvent.getResponseReadonlySlice(), bufferOrEvent.sequenceNumber, bufferOrEvent.backlog);
-					LOG.info("onBuffer finished " + bufferOrEvent.sequenceNumber + " receiver id " + bufferOrEvent.receiverId);
+					LOG.info("onBuffer finished " + bufferOrEvent.sequenceNumber + " receiver id " + bufferOrEvent.receiverId+ "backlog: "+bufferOrEvent.backlog);
 				}
 				//boolean readFinished= false;
 //				do {
@@ -219,7 +219,7 @@ class PartitionRequestClientHandler {
 				//		return getBuffer().isBuffer();
 				//	}
 				ReadOnlySlicedNetworkBuffer buffer=(ReadOnlySlicedNetworkBuffer)bufferOrEvent.getResponseReadonlySlice();
-				byte[] byteArray = new byte[buffer.getSize()];
+				byte[] byteArray = new byte[receivedSize];
 				buffer.getBytes(buffer.getReaderIndex(),byteArray);
 //				nettyBuffer.readBytes(byteArray);
 				MemorySegment memSeg = MemorySegmentFactory.wrap(byteArray);

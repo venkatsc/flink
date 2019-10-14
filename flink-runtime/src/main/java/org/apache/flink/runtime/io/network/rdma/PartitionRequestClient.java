@@ -263,7 +263,7 @@ class PartitionReaderClient implements Runnable {
 			ByteBuf receiveBuffer=null;
 			try {
 //			ByteBuf receiveBuffer = (NetworkBuffer)inputChannel.getBufferProvider().requestBuffer();
-				receiveBuffer = (NetworkBuffer) inputChannel.requestBuffer();
+				receiveBuffer = (NetworkBuffer) inputChannel.getBufferProvider().requestBuffer();
 				if (receiveBuffer != null) {
 					RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint, ++workRequestId, receiveBuffer);
 					receivedBuffers.addLast(receiveBuffer);
@@ -301,29 +301,40 @@ class PartitionReaderClient implements Runnable {
 			try {
 				// TODO: send credit if credit is reached zero
 //			for (int i=0;i<takeEventsCount;i++) {
+				long startTime = System.nanoTime();
 				if (availableCredit==0){
 					if (inputChannel.getUnannouncedCredit()>0) {
-						availableCredit = inputChannel.getAndResetUnannouncedCredit();
-//						LOG.info("Adding credit: {} on channel {}",availableCredit,inputChannel);
-						failed = postBuffers(availableCredit);
+						int unannouncedCredit = inputChannel.getAndResetUnannouncedCredit();
+						LOG.info("Adding credit: {} on channel {}",unannouncedCredit,inputChannel);
+						failed = postBuffers(unannouncedCredit);
 						msg = new NettyMessage.AddCredit(
 							inputChannel.getPartitionId(),
-							availableCredit-failed,
+							unannouncedCredit-failed,
 							inputChannel.getInputChannelId());
+						availableCredit+=unannouncedCredit;
 						clientEndpoint.getSendBuffer().put(msg.write(clientEndpoint.getNettyBufferpool()).nioBuffer());
 						RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
 					}else{
 //						LOG.info("No credit available on channel {}",availableCredit,inputChannel);
-						continue;
+						if (availableCredit==0) {
+							// wait for the credit to be available, otherwise connection stucks in blocking
+							continue;
+						}
 					}
 				}
+//				long endTime = System.nanoTime();
+//				LOG.info("verification of credit toook {}ns ",endTime-startTime);
+//				startTime = System.nanoTime();
 				IbvWC wc = clientEndpoint.getWcEvents().take();
+//				endTime = System.nanoTime();
+//				LOG.info("dequeue receive event took {}ns",endTime-startTime);
 //				LOG.info("Took completion event with work id {} ", wc.getWr_id());
 				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 						LOG.error("Receive posting failed. reposting new receive request");
 //						RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 					} else {
+//						startTime = System.nanoTime();
 						// InfiniBand completes requests in FIFO, so we should have first buffer filled with the data
 						ByteBuf receiveBuffer = receivedBuffers.pollFirst();
 //						if (receiveBuffer.refCnt()==2) {
@@ -346,8 +357,11 @@ class PartitionReaderClient implements Runnable {
 							byte ID = receiveBuffer.readByte();
 							switch (ID) {
 								case NettyMessage.BufferResponse.ID:
+//									startTime= System.nanoTime();
 									clientHandler.decodeMsg(NettyMessage.BufferResponse.readFrom(receiveBuffer), false, clientEndpoint, inputChannel, finished);
 //								int refCount= receiveBuffer.refCnt();
+//									endTime= System.nanoTime();
+//									LOG.info("decode message took {}ns",startTime-endTime);
 									break;
 								case NettyMessage.CloseRequest.ID:
 									LOG.info("closing on client side upon close request. Something might have gone wrong on server (reader released etc)");
@@ -357,15 +371,8 @@ class PartitionReaderClient implements Runnable {
 									LOG.error(" Un-identified response type " + ID);
 							}
 						}
-//						receiveBuffer = (ByteBuf)inputChannel.getBufferProvider().requestBuffer();
-//						clientEndpoint.getReceiveBuffer().clear();
-//						RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint, ++workRequestId,receiveBuffer);
-						//Post next request
-//						clientEndpoint.getSendBuffer().clear();
-
-						// TODO: send credit
-//						clientEndpoint.getSendBuffer().put(buf.nioBuffer());
-//						RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+//						endTime = System.nanoTime();
+//						LOG.info("Message processing delay {}ns",endTime-startTime);
 					}
 				} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {

@@ -146,11 +146,6 @@ public class RdmaServerRequestHandler implements Runnable {
 							if (msgClazz == NettyMessage.CloseRequest.class) {
 								clientClose = true;
 								LOG.info("closing the endpoint "+getEndpointStr(clientEndpoint));
-//								for (InputChannelID channelID: readers.keySet()){
-//									NetworkSequenceViewReader reader = readers.get(channelID);
-//									reader.notifySubpartitionConsumed();
-//									reader.releaseAllResources();
-//								}
 							} else if (msgClazz == NettyMessage.PartitionRequest.class) {
 								// prepare response and post it
 								NettyMessage.PartitionRequest partitionRequest = (NettyMessage.PartitionRequest)

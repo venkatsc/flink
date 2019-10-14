@@ -82,7 +82,7 @@ class PipelinedSubpartition extends ResultSubpartition {
 	@Override
 	public void finish() throws IOException {
 		add(EventSerializer.toBufferConsumer(EndOfPartitionEvent.INSTANCE), true);
-		LOG.debug("{}: Finished {}.", parent.getOwningTaskName(), this);
+		LOG.debug("Finished partition on task {}: partition: {}.", parent.getOwningTaskName(), this);
 	}
 
 	private boolean add(BufferConsumer bufferConsumer, boolean finish) {
