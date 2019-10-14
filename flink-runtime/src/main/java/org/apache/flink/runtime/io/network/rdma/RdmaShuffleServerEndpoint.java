@@ -89,7 +89,7 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 		this.sendBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
 		this.receiveBuffer = ByteBuffer.allocateDirect(bufferSize);
 		this.wholeMR = registerMemory().execute().getMr();
-		System.out.printf("server rkey: %d lkey: %d handle:%d\n",wholeMR.getRkey(),wholeMR.getLkey(),wholeMR.getHandle());
+		LOG.info("server rkey: %d lkey: %d handle:%d\n",wholeMR.getRkey(),wholeMR.getLkey(),wholeMR.getHandle());
 //		this.registeredReceiveMemory = registerMemory(receiveBuffer).execute().getMr();
 //		this.registeredSendMemory = registerMemory(sendBuffer).execute().getMr(); // register the send buffer
 //		this.availableFreeReceiveBuffers = ByteBuffer.allocateDirect(2); // TODO: assumption of less receive buffers

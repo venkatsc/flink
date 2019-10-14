@@ -101,7 +101,7 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 //		this.registeredSendMemory = registerMemory(sendBuffer).execute().getMr(); // register the send buffer
 		this.wholeMR = registerMemory().execute().getMr();
 
-		System.out.printf("Client rkey: %d lkey: %d handle:%d\n",wholeMR.getRkey(),wholeMR.getLkey(),wholeMR.getHandle());
+		LOG.info("Client rkey: %d lkey: %d handle:%d\n",wholeMR.getRkey(),wholeMR.getLkey(),wholeMR.getHandle());
 //		this.availableFreeReceiveBuffers = ByteBuffer.allocateDirect(2); // TODO: assumption of less receive buffers
 //		this.availableFreeReceiveBuffersRegisteredMemory = registerMemory(availableFreeReceiveBuffers).execute()
 //			.getMr();
