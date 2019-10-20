@@ -412,7 +412,7 @@ public class TaskManagerServices {
 				connectionManager = new NettyConnectionManager(nettyConfig);
 				enableCreditBased = nettyConfig.isCreditBasedEnabled();
 			}else{
-				connectionManager = new RdmaConnectionManager(nettyConfig);
+				connectionManager = new RdmaConnectionManager(nettyConfig,networkBufferPool);
 			}
 		} else {
 			connectionManager = new LocalConnectionManager();

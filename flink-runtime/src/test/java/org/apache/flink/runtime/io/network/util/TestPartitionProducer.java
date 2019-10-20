@@ -84,7 +84,7 @@ public class TestPartitionProducer implements Callable<Boolean> {
 				}
 			}
 
-			partition.finish();
+			partition.finish(network.getNetworkBufferPool());
 
 			success = true;
 

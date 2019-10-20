@@ -27,6 +27,7 @@ import org.apache.flink.runtime.io.network.buffer.BufferConsumer;
 import org.apache.flink.runtime.io.network.buffer.BufferPool;
 import org.apache.flink.runtime.io.network.buffer.BufferPoolOwner;
 import org.apache.flink.runtime.io.network.buffer.BufferProvider;
+import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 import org.apache.flink.runtime.io.network.partition.consumer.LocalInputChannel;
 import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel;
 import org.apache.flink.runtime.jobgraph.DistributionPattern;
@@ -273,15 +274,16 @@ public class ResultPartition implements ResultPartitionWriter, BufferPoolOwner {
 	 * <p>After this operation, it is not possible to add further data to the result partition.
 	 *
 	 * <p>For BLOCKING results, this will trigger the deployment of consuming tasks.
+	 * @param networkBufferPool
 	 */
-	public void finish() throws IOException {
+	public void finish(NetworkBufferPool networkBufferPool) throws IOException {
 		boolean success = false;
 
 		try {
 			checkInProduceState();
 
 			for (ResultSubpartition subpartition : subpartitions) {
-				subpartition.finish();
+				subpartition.finish(networkBufferPool.requestMemorySegment());
 			}
 
 			success = true;

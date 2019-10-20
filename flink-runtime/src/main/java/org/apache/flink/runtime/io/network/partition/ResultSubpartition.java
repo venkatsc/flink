@@ -19,9 +19,12 @@
 package org.apache.flink.runtime.io.network.partition;
 
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
 import org.apache.flink.runtime.io.network.buffer.BufferConsumer;
+import org.apache.flink.runtime.io.network.buffer.BufferProvider;
 import org.apache.flink.runtime.io.network.buffer.NetworkBuffer;
+import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 
 import javax.annotation.concurrent.GuardedBy;
 
@@ -107,7 +110,7 @@ public abstract class ResultSubpartition {
 
 	public abstract void flush();
 
-	public abstract void finish() throws IOException;
+	public abstract void finish(MemorySegment segment) throws IOException;
 
 	public abstract void release() throws IOException;
 

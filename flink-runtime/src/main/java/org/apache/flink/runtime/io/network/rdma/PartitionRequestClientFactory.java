@@ -31,6 +31,7 @@ import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel
 //import org.apache.flink.shaded.netty4.io.netty.channel.ChannelFuture;
 //import org.apache.flink.shaded.netty4.io.netty.channel.ChannelFutureListener;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -42,17 +43,19 @@ import java.util.concurrent.ConcurrentMap;
  * instances.
  */
 class PartitionRequestClientFactory {
-	private final HashMap<ConnectionID,RdmaClient> rdmaClients = new HashMap<>();
+	private final HashMap<ConnectionID,RdmaShuffleClientEndpoint> clientEndpoints = new HashMap<>();
 	private final ConcurrentMap<ConnectionID, Object> clients = new ConcurrentHashMap<ConnectionID, Object>();
 	private static final Logger LOG = LoggerFactory.getLogger(PartitionRequestClientFactory.class);
 	private final NettyBufferPool bufferPool;
 	private PartitionRequestClientHandler clientHandler ;
 	private  NettyConfig rdmaCfg;
+	private RdmaClient rdmaClient;
 
-	PartitionRequestClientFactory(PartitionRequestClientHandler clientHandler, NettyBufferPool bufferPool, NettyConfig rdmaCfg) {
+	PartitionRequestClientFactory(PartitionRequestClientHandler clientHandler, NettyBufferPool bufferPool, NettyConfig rdmaCfg,RdmaClient rdmaClient) {
 		this.clientHandler = clientHandler;
 		this.bufferPool = bufferPool;
 		this.rdmaCfg= rdmaCfg;
+		this.rdmaClient=rdmaClient;
 	}
 
 	/**
@@ -73,11 +76,11 @@ class PartitionRequestClientFactory {
 			// We create a "connecting future" and atomically add it to the map.
 			// Only the thread that really added it establishes the channel.
 			// The others need to wait on that original establisher's future.
-			RdmaClient rdmaClient = new RdmaClient(rdmaCfg, clientHandler, bufferPool);
-			rdmaClients.put(connectionId,rdmaClient);
+			RdmaShuffleClientEndpoint endpoint= rdmaClient.start(connectionId.getAddress());
+			clientEndpoints.put(connectionId,endpoint);
 			rdmaClient.start(connectionId.getAddress());
 			client = new PartitionRequestClient(
-				rdmaClient.getEndpoint(), clientHandler, connectionId, this);
+				endpoint, clientHandler, connectionId, this);
 //					if (disposeRequestClient) {
 //						partitionRequestClient.disposeIfNotUsed();
 //					}
@@ -93,11 +96,17 @@ class PartitionRequestClientFactory {
 	}
 
 	public void closeOpenChannelConnections(ConnectionID connectionId) {
-		RdmaClient rdmaClient=rdmaClients.get(connectionId);
+		RdmaShuffleClientEndpoint endpoint=clientEndpoints.get(connectionId);
 		LOG.info("Asked to close the client connection");
-		if (rdmaClient!=null){
+		if (endpoint!=null){
 			LOG.info("closing the client connection");
-			rdmaClient.stop();
+			try {
+				endpoint.close();
+			} catch (IOException e) {
+				LOG.error("Failed to close client connection",e);
+			} catch (InterruptedException e) {
+				LOG.error("Failed to close client connection",e);
+			}
 		}
 	}
 

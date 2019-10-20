@@ -18,10 +18,13 @@
 
 package org.apache.flink.runtime.io.network.partition;
 
+import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.runtime.io.network.api.EndOfPartitionEvent;
 import org.apache.flink.runtime.io.network.api.serialization.EventSerializer;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
 import org.apache.flink.runtime.io.network.buffer.BufferConsumer;
+import org.apache.flink.runtime.io.network.buffer.BufferProvider;
+import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -80,8 +83,8 @@ class PipelinedSubpartition extends ResultSubpartition {
 	}
 
 	@Override
-	public void finish() throws IOException {
-		add(EventSerializer.toBufferConsumer(EndOfPartitionEvent.INSTANCE), true);
+	public void finish(MemorySegment segment) throws IOException {
+		add(EventSerializer.toBufferConsumer(EndOfPartitionEvent.INSTANCE,segment), true);
 		LOG.debug("Finished partition on task {}: partition: {}.", parent.getOwningTaskName(), this);
 	}
 

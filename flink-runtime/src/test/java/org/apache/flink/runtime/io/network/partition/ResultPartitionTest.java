@@ -119,7 +119,7 @@ public class ResultPartitionTest {
 		ResultPartitionConsumableNotifier notifier = mock(ResultPartitionConsumableNotifier.class);
 		try {
 			ResultPartition partition = createPartition(notifier, pipelined, true);
-			partition.finish();
+			partition.finish(network.getNetworkBufferPool());
 			reset(notifier);
 			// partition.add() should fail
 			partition.addBufferConsumer(bufferConsumer, 0);
@@ -238,7 +238,7 @@ public class ResultPartitionTest {
 				BufferBuilder bufferBuilder = resultPartition.getBufferPool().requestBufferBuilderBlocking();
 				resultPartition.addBufferConsumer(bufferBuilder.createBufferConsumer(), 0);
 			}
-			resultPartition.finish();
+			resultPartition.finish(network.getNetworkBufferPool());
 
 			assertEquals(0, resultPartition.getBufferPool().getNumberOfAvailableMemorySegments());
 

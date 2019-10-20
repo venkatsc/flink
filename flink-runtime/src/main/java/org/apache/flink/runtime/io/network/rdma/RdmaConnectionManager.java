@@ -18,15 +18,20 @@
 
 package org.apache.flink.runtime.io.network.rdma;
 
+import com.ibm.disni.verbs.IbvMr;
+import org.apache.commons.collections.map.HashedMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Map;
 
+import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.runtime.io.network.ConnectionID;
 import org.apache.flink.runtime.io.network.ConnectionManager;
 import org.apache.flink.runtime.io.network.PartitionRequestClientIf;
 import org.apache.flink.runtime.io.network.TaskEventDispatcher;
+import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
 import org.apache.flink.runtime.io.network.netty.NettyConfig;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
@@ -36,18 +41,21 @@ public class RdmaConnectionManager implements ConnectionManager {
     public static final int DATA_MSG_HEADER_SIZE = 39;
 	private final RdmaServer server;
 	private final NettyConfig rdmaConfig;
-
+	private final NetworkBufferPool networkBufferPool; //off-heap buffers
+    private RdmaClient rdmaClient;
 //	private final RdmaClient client;
+	private Map<Long,IbvMr> registeredMRs=new HashedMap();
 
 	private final NettyBufferPool bufferPool = new NettyBufferPool(8); // TODO (venkat): we might want to allocate
 	// pool of buffers per
 	// connection
 	private PartitionRequestClientFactory partitionRequestClientFactory;
 
-	public RdmaConnectionManager(NettyConfig rdmaConfig) {
-
-		this.server = new RdmaServer(rdmaConfig,bufferPool);
+	public RdmaConnectionManager(NettyConfig rdmaConfig, NetworkBufferPool networkBufferPool) {
 		this.rdmaConfig=rdmaConfig;
+		this.networkBufferPool=networkBufferPool;
+		this.server = new RdmaServer(rdmaConfig,bufferPool,networkBufferPool);
+
 //		this.client = new RdmaClient(rdmaConfig, new PartitionRequestClientHandler(), bufferPool);
 //		this.bufferPool = new NettyBufferPool(rdmaConfig.getNumberOfArenas());
 
@@ -58,10 +66,11 @@ public class RdmaConnectionManager implements ConnectionManager {
 		IOException {
 		server.setPartitionProvider(partitionProvider);
 		server.setTaskEventDispatcher(taskEventDispatcher);
-		server.start();
+		server.start(registeredMRs);
+		rdmaClient= new RdmaClient(rdmaConfig, new PartitionRequestClientHandler(), bufferPool,networkBufferPool,registeredMRs);
 //		client.start(); // client just initializes, only starts when the createPartitionRequestClient called used ConnectionId
 		// instead of netty config
-		this.partitionRequestClientFactory = new PartitionRequestClientFactory(new PartitionRequestClientHandler(), bufferPool,rdmaConfig);
+		this.partitionRequestClientFactory = new PartitionRequestClientFactory(new PartitionRequestClientHandler(), bufferPool,rdmaConfig,rdmaClient);
 	}
 
 	@Override

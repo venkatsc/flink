@@ -31,8 +31,10 @@ import org.apache.flink.runtime.io.network.api.EndOfPartitionEvent;
 import org.apache.flink.runtime.io.network.api.EndOfSuperstepEvent;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
 import org.apache.flink.runtime.io.network.buffer.BufferConsumer;
+import org.apache.flink.runtime.io.network.buffer.BufferProvider;
 import org.apache.flink.runtime.io.network.buffer.FreeingBufferRecycler;
 import org.apache.flink.runtime.io.network.buffer.NetworkBuffer;
+import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 import org.apache.flink.runtime.state.CheckpointStorageLocationReference;
 import org.apache.flink.util.InstantiationUtil;
 
@@ -278,12 +280,11 @@ public class EventSerializer {
 		return buffer;
 	}
 
-	public static BufferConsumer toBufferConsumer(AbstractEvent event) throws IOException {
+	public static BufferConsumer toBufferConsumer(AbstractEvent event, MemorySegment segment) throws IOException {
 		final ByteBuffer serializedEvent = EventSerializer.toSerializedEvent(event);
-
-		MemorySegment data = MemorySegmentFactory.wrap(serializedEvent.array());
-
-		return new BufferConsumer(data, FreeingBufferRecycler.INSTANCE, false);
+		segment.put(0, serializedEvent.array());
+//		MemorySegment data = MemorySegmentFactory.wrap(serializedEvent.array());
+		return new BufferConsumer(segment, FreeingBufferRecycler.INSTANCE, false);
 	}
 
 	public static AbstractEvent fromBuffer(Buffer buffer, ClassLoader classLoader) throws IOException {

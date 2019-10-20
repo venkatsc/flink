@@ -28,28 +28,40 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 
 
 public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaShuffleServerEndpoint.class);
-	private int workRequestId = 0;
 	private int bufferSize; // Todo: set default buffer size
 	private ByteBuffer sendBuffer; // Todo: add buffer manager with multiple buffers
-	private IbvMr wholeMR;
+//	private IbvMr wholeMR;
+
+	private Map<Long,IbvMr> registeredMRs;
 
 	private IbvMr registeredSendMemory; // Registered memory for the above buffer
-
-	private ByteBuffer availableFreeReceiveBuffers;
-	private IbvMr availableFreeReceiveBuffersRegisteredMemory;
-
-	private ByteBuffer availableFreeReceiveBuffersNotification;
-	private IbvMr availableFreeReceiveBuffersNotificationRegisteredMemory;
 
 	private ByteBuffer receiveBuffer; // Todo: add buffer manager with multiple buffers
 	private IbvMr registeredReceiveMemory;
 
 	private LastEvent lastEvent = new LastEvent();
+
+	public Map<Long, IbvMr> getRegisteredMRs() {
+		return registeredMRs;
+	}
+
+	public void setRegisteredMRs(Map<Long, IbvMr> registeredMRs) {
+		this.registeredMRs = registeredMRs;
+	}
+
+	public IbvMr getRegisteredSendMemory() {
+		return registeredSendMemory;
+	}
+
+	public IbvMr getRegisteredReceiveMemory() {
+		return registeredReceiveMemory;
+	}
 
 	private class LastEvent {
 		private IbvWC lastEvent;
@@ -88,10 +100,10 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 		LOG.info("Allocating server rdma buffers");
 		this.sendBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
 		this.receiveBuffer = ByteBuffer.allocateDirect(bufferSize);
-		this.wholeMR = registerMemory().execute().getMr();
-		LOG.info("server rkey: %d lkey: %d handle:%d\n",wholeMR.getRkey(),wholeMR.getLkey(),wholeMR.getHandle());
-//		this.registeredReceiveMemory = registerMemory(receiveBuffer).execute().getMr();
-//		this.registeredSendMemory = registerMemory(sendBuffer).execute().getMr(); // register the send buffer
+//		this.wholeMR = registerMemory().execute().getMr();
+//		LOG.info("server rkey: %d lkey: %d handle:%d\n",wholeMR.getRkey(),wholeMR.getLkey(),wholeMR.getHandle());
+		this.registeredReceiveMemory = registerMemory(receiveBuffer).execute().getMr();
+		this.registeredSendMemory = registerMemory(sendBuffer).execute().getMr(); // register the send buffer
 //		this.availableFreeReceiveBuffers = ByteBuffer.allocateDirect(2); // TODO: assumption of less receive buffers
 //		this.availableFreeReceiveBuffersRegisteredMemory = registerMemory(availableFreeReceiveBuffers).execute()
 //			.getMr();
@@ -105,21 +117,13 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 		return this.sendBuffer;
 	}
 
-	public IbvMr getWholeMR(){
-		return wholeMR;
-	}
-
-//	public IbvMr getRegisteredSendMemory() {
-//		return registeredSendMemory;
+//	public IbvMr getWholeMR(){
+//		return wholeMR;
 //	}
 
 	public ByteBuffer getReceiveBuffer() {
 		return this.receiveBuffer;
 	}
-
-//	public IbvMr getRegisteredReceiveMemory() {
-//		return registeredReceiveMemory;
-//	}
 
 	public ArrayBlockingQueue<IbvWC> getWcEvents() {
 		synchronized (this) {
@@ -127,31 +131,8 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 		}
 	}
 
-	public ByteBuffer getAvailableFreeReceiveBuffers() {
-		return availableFreeReceiveBuffers;
-	}
 
-	public IbvMr getAvailableFreeReceiveBuffersRegisteredMemory() {
-		return availableFreeReceiveBuffersRegisteredMemory;
-	}
-
-	public ByteBuffer getAvailableFreeReceiveBuffersNotification() {
-		return availableFreeReceiveBuffersNotification;
-	}
-
-	public IbvMr getAvailableFreeReceiveBuffersNotificationRegisteredMemory() {
-		return availableFreeReceiveBuffersNotificationRegisteredMemory;
-	}
-
-	//
-//	public NettyMessage writeAndRead(NettyMessage message) throws Exception {
-//		NettyMessage response =null;
-//		for (int i=0;i<2;i++) {
-//
-//		}
-//		return null;
-//	}
-	public void stop() {
+  public void stop() {
 		try {
 			LOG.info("Server endpoint closed. src: "+ this.getSrcAddr() + " dst: " +this.getDstAddr());
 			this.close();

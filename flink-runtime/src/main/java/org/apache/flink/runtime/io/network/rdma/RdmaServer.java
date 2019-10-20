@@ -22,6 +22,7 @@ import com.esotericsoftware.minlog.Log;
 import com.ibm.disni.RdmaActiveEndpointGroup;
 import com.ibm.disni.RdmaEndpointFactory;
 import com.ibm.disni.RdmaServerEndpoint;
+import com.ibm.disni.verbs.IbvMr;
 import com.ibm.disni.verbs.IbvWC;
 import com.ibm.disni.verbs.RdmaCmId;
 import org.apache.commons.cli.ParseException;
@@ -37,8 +38,10 @@ import java.util.Map;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.Unpooled;
 
+import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.runtime.io.network.NetworkSequenceViewReader;
 import org.apache.flink.runtime.io.network.TaskEventDispatcher;
+import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
 import org.apache.flink.runtime.io.network.netty.NettyConfig;
 import org.apache.flink.runtime.io.network.partition.ProducerFailedException;
@@ -65,6 +68,7 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 	private ResultPartitionProvider partitionProvider;
 	private TaskEventDispatcher taskEventDispatcher;
 	private RdmaServerRequestHandler handler;
+	private NetworkBufferPool networkBufferPool;
 
 	/**
 	 * Creates the Queue pair endpoint and waits for the incoming connections
@@ -78,9 +82,10 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 		return new RdmaShuffleServerEndpoint(endpointGroup, idPriv, serverSide, rdmaConfig.getMemorySegmentSize()+100);
 	}
 
-	public RdmaServer(NettyConfig rdmaConfig, NettyBufferPool bufferPool) {
+	public RdmaServer(NettyConfig rdmaConfig, NettyBufferPool bufferPool,NetworkBufferPool networkBufferPool) {
 		this.rdmaConfig = rdmaConfig;
 		this.bufferPool = bufferPool;
+		this.networkBufferPool=networkBufferPool;
 	}
 
 	public void setPartitionProvider(ResultPartitionProvider partitionProvider) {
@@ -91,10 +96,23 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 		this.taskEventDispatcher = taskEventDispatcher;
 	}
 
-	public void start() throws IOException {
+	private void registerMemoryRegions(RdmaServerEndpoint<RdmaShuffleServerEndpoint> endpoint,Map<Long,IbvMr> registerdMRs) throws IOException {
+		long start = System.nanoTime();
+		for (int i = 0; i < networkBufferPool.getTotalNumberOfMemorySegments(); i++) {
+			MemorySegment segment=networkBufferPool.requestMemorySegment();
+			IbvMr mr=endpoint.registerMemory(segment.getAddress(),segment.size()).execute().getMr();
+			registerdMRs.put(segment.getAddress(),mr);
+			networkBufferPool.recycle(segment);
+		}
+		long end = System.nanoTime();
+		LOG.info("Server: Memory resgistration time for (in seconds): " + ((end
+			- start) / (1000.0*1000*1000)));
+	}
+
+	public void start(Map<Long,IbvMr> registerdMRs) throws IOException {
 		// create a EndpointGroup. The RdmaActiveEndpointGroup contains CQ processing and delivers CQ event to the
 		// endpoint.dispatchCqEvent() method.
-		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleServerEndpoint>(1000, false, 2000, 2, 1000,true);
+		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleServerEndpoint>(1000, false, 2000, 2, 100);
 		endpointGroup.init(this);
 		endpointGroup.getConnParam().setRnr_retry_count((byte)7);
 		// create a server endpoint
@@ -105,12 +123,14 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 		address = new InetSocketAddress(rdmaConfig.getServerAddress(), rdmaConfig.getServerPort());
 		try {
 			serverEndpoint.bind(address, 10);
+			registerMemoryRegions(serverEndpoint,registerdMRs);
+
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		System.out.println("SimpleServer::servers bound to address " + address.toString());
+		LOG.info("SimpleServer::servers bound to address " + address.toString());
 
-		handler = new RdmaServerRequestHandler(serverEndpoint,partitionProvider,taskEventDispatcher,bufferPool);
+		handler = new RdmaServerRequestHandler(serverEndpoint,partitionProvider,taskEventDispatcher,bufferPool,registerdMRs);
 		Thread thread = new Thread(handler);
 		thread.start();
 		LOG.info("Server handler thread start at " + address.toString());

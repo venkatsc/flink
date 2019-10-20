@@ -729,7 +729,7 @@ public class Task implements Runnable, TaskActions, CheckpointListener {
 			for (ResultPartition partition : producedPartitions) {
 				if (partition != null) {
 					LOG.info("-----> partition not null");
-					partition.finish();
+					partition.finish(network.getNetworkBufferPool());
 				}else{
 					LOG.info("-----> partition is null");
 				}

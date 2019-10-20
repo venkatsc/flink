@@ -31,7 +31,9 @@ import java.util.LinkedList;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 
+import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
+import org.apache.flink.runtime.io.network.buffer.NetworkBuffer;
 import org.apache.flink.runtime.io.network.buffer.ReadOnlySlicedNetworkBuffer;
 import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel;
 
@@ -44,34 +46,52 @@ public class RdmaSendReceiveUtil {
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
 //			LOG.info("posting server send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
-			IbvSge sendSGE = new IbvSge();
-			response.getHeaderBuf().readInt(); // frame info
-			int magic = response.getHeaderBuf().readInt();
-			if (magic !=NettyMessage.MAGIC_NUMBER){
-				LOG.error("Server sending wrong magic number and it should never happen. Magic: {}",magic);
-			}
-			ByteBuf buf = response.getHeaderBuf();
-			sendSGE.setAddr(buf.memoryAddress());
-			sendSGE.setLength(response.getHeaderBuf().capacity());
-			sendSGE.setLkey(clientEndpoint.getWholeMR().getLkey());
-			sges.add(sendSGE);
 
-			IbvSge sendSGE1 = new IbvSge();
-			if (response.getTempBuffer()!=null){ // the buffer is not direct buffer and hence rewritten
-				sendSGE1.setAddr(response.getTempBuffer().memoryAddress());
-				sendSGE1.setLength(response.getTempBuffer().readableBytes());
-				sendSGE1.setLkey(clientEndpoint.getWholeMR().getLkey());
-				sges.add(sendSGE1);
-//				ByteBuf buf1 =response.getTempBuffer();
-//				LOG.info("sending temp buffer readable:{} capacity:{}",buf1.readableBytes(),buf1.capacity());
+//			int magic = response.getHeaderBuf().readInt();
+//			if (magic !=NettyMessage.MAGIC_NUMBER){
+//				LOG.error("Server sending wrong magic number and it should never happen. Magic: {}",magic);
+//			}
+			ByteBuf buf = response.getBuffer();
+			MemorySegment segment;
+			long dataaddress ;
+			if (buf instanceof NetworkBuffer){
+				segment = ((NetworkBuffer) buf).getMemorySegment();
+				dataaddress = ((NetworkBuffer) buf).memoryAddress();
+			}else if(buf instanceof ReadOnlySlicedNetworkBuffer){
+				segment = ((ReadOnlySlicedNetworkBuffer) buf).getMemorySegment();
+				dataaddress = ((ReadOnlySlicedNetworkBuffer) buf).memoryAddress()+((ReadOnlySlicedNetworkBuffer) buf).getMemorySegmentOffset();
 			}else{
-				ReadOnlySlicedNetworkBuffer buffer = (ReadOnlySlicedNetworkBuffer) response.getNettyBuffer();
-				sendSGE1.setAddr(buffer.getMemorySegment().getAddress() + buffer.getMemorySegmentOffset());
-				sendSGE1.setLength(buffer.writerIndex());
-				sendSGE1.setLkey(clientEndpoint.getWholeMR().getLkey());
-				sges.add(sendSGE1);
-//				LOG.info("sending network buffer readable:{} capacity:{} writer index: {} getsize: {}",buffer.readableBytes(),buffer.capacity(),buffer.writerIndex(),buffer.getSize());
+				throw new IOException("Received unidentified network buffer type");
 			}
+			// header is at the end of segment
+//			int start = segment.size()-RdmaConnectionManager.DATA_MSG_HEADER_SIZE;
+//			IbvSge headerSGE = new IbvSge();
+//			headerSGE.setAddr(segment.getAddress()+start);
+//			headerSGE.setLength(RdmaConnectionManager.DATA_MSG_HEADER_SIZE-1);
+//			headerSGE.setLkey(clientEndpoint.getRegisteredMRs().get(segment.getAddress()).getLkey());
+//			sges.add(headerSGE);
+			// actual data
+			IbvSge dataSGE = new IbvSge();
+			dataSGE.setAddr(dataaddress);
+			dataSGE.setLength(buf.writerIndex());
+			dataSGE.setLkey(clientEndpoint.getRegisteredMRs().get(segment.getAddress()).getLkey());
+			sges.add(dataSGE);
+
+//			IbvSge sendSGE1 = new IbvSge();
+//			if (response.getTempBuffer()!=null){ // the buffer is not direct buffer and hence rewritten
+//				sendSGE1.setAddr(response.getTempBuffer().memoryAddress());
+//				sendSGE1.setLength(response.getTempBuffer().readableBytes());
+//				sendSGE1.setLkey(clientEndpoint.getWholeMR().getLkey());
+//				sges.add(sendSGE1);
+////				ByteBuf buf1 =response.getTempBuffer();
+////				LOG.info("sending temp buffer readable:{} capacity:{}",buf1.readableBytes(),buf1.capacity());
+//			}else{
+//				sendSGE1.setAddr(buffer.getMemorySegment().getAddress() + buffer.getMemorySegmentOffset());
+//				sendSGE1.setLength(buffer.writerIndex());
+//				sendSGE1.setLkey(clientEndpoint.getRegisteredMRs().get(buffer.getMemorySegment().getAddress() ).getLkey());
+//				sges.add(sendSGE1);
+////				LOG.info("sending network buffer readable:{} capacity:{} writer index: {} getsize: {}",buffer.readableBytes(),buffer.capacity(),buffer.writerIndex(),buffer.getSize());
+//			}
 
 			// Create send Work Request (WR)
 			IbvSendWR sendWR = new IbvSendWR();
@@ -99,7 +119,7 @@ public class RdmaSendReceiveUtil {
 			IbvSge sendSGE = new IbvSge();
 			sendSGE.setAddr(((DirectBuffer) clientEndpoint.getSendBuffer()).address());
 			sendSGE.setLength(clientEndpoint.getSendBuffer().capacity());
-			sendSGE.setLkey(clientEndpoint.getWholeMR().getLkey());
+			sendSGE.setLkey(clientEndpoint.getRegisteredSendMemory().getLkey());
 			sges.add(sendSGE);
 
 			// Create send Work Request (WR)
@@ -123,7 +143,7 @@ public class RdmaSendReceiveUtil {
 			IbvSge sendSGE = new IbvSge();
 			sendSGE.setAddr(((DirectBuffer) clientEndpoint.getSendBuffer()).address());
 			sendSGE.setLength(clientEndpoint.getSendBuffer().capacity());
-			sendSGE.setLkey(clientEndpoint.getWholeMR().getLkey());
+			sendSGE.setLkey(clientEndpoint.getRegisteredSendMemory().getLkey());
 			sges.add(sendSGE);
 			// Create send Work Request (WR)
 			IbvSendWR sendWR = new IbvSendWR();
@@ -151,7 +171,7 @@ public class RdmaSendReceiveUtil {
 			IbvSge recvSGE = new IbvSge();
 			recvSGE.setAddr(((DirectBuffer) clientEndpoint.getReceiveBuffer()).address());
 			recvSGE.setLength(clientEndpoint.getReceiveBuffer().capacity());
-			recvSGE.setLkey(clientEndpoint.getWholeMR().getLkey());
+			recvSGE.setLkey(clientEndpoint.getRegisteredReceiveMemory().getLkey());
 			sges.add(recvSGE);
 
 			IbvRecvWR recvWR = new IbvRecvWR();
@@ -168,7 +188,7 @@ public class RdmaSendReceiveUtil {
 			IbvSge recvSGE = new IbvSge();
 			recvSGE.setAddr(((DirectBuffer) clientEndpoint.getReceiveBuffer()).address());
 			recvSGE.setLength(clientEndpoint.getReceiveBuffer().capacity());
-			recvSGE.setLkey(clientEndpoint.getWholeMR().getLkey());
+			recvSGE.setLkey(clientEndpoint.getRegisteredReceiveMemory().getLkey());
 			sges.add(recvSGE);
 
 			IbvRecvWR recvWR = new IbvRecvWR();
@@ -190,7 +210,7 @@ public class RdmaSendReceiveUtil {
 			IbvSge recvSGE = new IbvSge();
 			recvSGE.setAddr(buffer.memoryAddress());
 			recvSGE.setLength(buffer.capacity());
-			recvSGE.setLkey(clientEndpoint.getWholeMR().getLkey());
+			recvSGE.setLkey(clientEndpoint.getRegisteredMRs().get(buffer.memoryAddress()).getLkey());
 			sges.add(recvSGE);
 
 			IbvRecvWR recvWR = new IbvRecvWR();

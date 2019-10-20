@@ -20,6 +20,7 @@ package org.apache.flink.runtime.io.network.partition;
 
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.configuration.TaskManagerOptions;
+import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.runtime.io.disk.iomanager.BufferFileWriter;
 import org.apache.flink.runtime.io.disk.iomanager.IOManager;
 import org.apache.flink.runtime.io.network.api.EndOfPartitionEvent;
@@ -27,6 +28,9 @@ import org.apache.flink.runtime.io.network.api.serialization.EventSerializer;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
 import org.apache.flink.runtime.io.network.buffer.BufferConsumer;
 import org.apache.flink.runtime.io.network.buffer.BufferPool;
+import org.apache.flink.runtime.io.network.buffer.BufferProvider;
+import org.apache.flink.runtime.io.network.buffer.NetworkBuffer;
+import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,7 +66,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  *
  * <p>Note on thread safety. Synchronizing on {@code buffers} is used to synchronize
  * writes and reads. Synchronizing on {@code this} is used against concurrent
- * {@link #add(BufferConsumer)} and clean ups {@link #release()} / {@link #finish()} which
+ * {@link #add(BufferConsumer)} and clean ups {@link #release()} / {@link #finish(MemorySegment)} which
  * also are touching {@code spillWriter}. Since we do not want to block reads during
  * spilling, we need those two synchronization. Probably this model could be simplified.
  */
@@ -130,9 +134,9 @@ class SpillableSubpartition extends ResultSubpartition {
 	}
 
 	@Override
-	public synchronized void finish() throws IOException {
+	public synchronized void finish(MemorySegment segment) throws IOException {
 		synchronized (buffers) {
-			if (add(EventSerializer.toBufferConsumer(EndOfPartitionEvent.INSTANCE), true)) {
+			if (add(EventSerializer.toBufferConsumer(EndOfPartitionEvent.INSTANCE,segment), true)) {
 				isFinished = true;
 			}
 

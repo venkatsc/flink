@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
@@ -50,12 +51,22 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 	private PartitionRequestClientHandler clientHandler;
 	private boolean isClosed = false;
 
+	private Map<Long,IbvMr> registeredMRs;
+
 	private ArrayBlockingQueue<IbvWC> wcEvents = new ArrayBlockingQueue<>(1000);
 	private static int workRequestId;
 	private NettyBufferPool bufferPool;
 
 	private LastEvent lastEvent = new LastEvent();
-	private IbvMr wholeMR;
+
+	public Map<Long, IbvMr> getRegisteredMRs() {
+		return registeredMRs;
+	}
+
+	public void setRegisteredMRs(Map<Long, IbvMr> registeredMRs) {
+		this.registeredMRs = registeredMRs;
+	}
+//	private IbvMr wholeMR;
 
 	private class LastEvent {
 		private IbvWC lastEvent;
@@ -95,21 +106,21 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 		super.init();
 		LOG.info("Allocating client rdma buffers");
 		this.receiveBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
-//		this.registeredReceiveMemory = registerMemory(receiveBuffer).execute().getMr(); // register the send buffer
+		this.registeredReceiveMemory = registerMemory(receiveBuffer).execute().getMr(); // register the send buffer
 
 		this.sendBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
-//		this.registeredSendMemory = registerMemory(sendBuffer).execute().getMr(); // register the send buffer
-		this.wholeMR = registerMemory().execute().getMr();
+		this.registeredSendMemory = registerMemory(sendBuffer).execute().getMr(); // register the send buffer
+//		this.wholeMR = registerMemory().execute().getMr();
 
-		LOG.info("Client rkey: %d lkey: %d handle:%d\n",wholeMR.getRkey(),wholeMR.getLkey(),wholeMR.getHandle());
+//		LOG.info("Client rkey: %d lkey: %d handle:%d\n",wholeMR.getRkey(),wholeMR.getLkey(),wholeMR.getHandle());
 //		this.availableFreeReceiveBuffers = ByteBuffer.allocateDirect(2); // TODO: assumption of less receive buffers
 //		this.availableFreeReceiveBuffersRegisteredMemory = registerMemory(availableFreeReceiveBuffers).execute()
 //			.getMr();
 	}
 
-	public IbvMr getWholeMR(){
-		return wholeMR;
-	}
+//	public IbvMr getWholeMR(){
+//		return wholeMR;
+//	}
 	public ByteBuffer getReceiveBuffer() {
 		return this.receiveBuffer;
 	}

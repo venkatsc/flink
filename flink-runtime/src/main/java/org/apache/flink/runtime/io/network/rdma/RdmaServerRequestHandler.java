@@ -2,6 +2,7 @@ package org.apache.flink.runtime.io.network.rdma;
 
 import com.esotericsoftware.minlog.Log;
 import com.ibm.disni.RdmaServerEndpoint;
+import com.ibm.disni.verbs.IbvMr;
 import com.ibm.disni.verbs.IbvWC;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,14 +36,16 @@ public class RdmaServerRequestHandler implements Runnable {
 	private final ResultPartitionProvider partitionProvider;
 	private final TaskEventDispatcher taskEventDispatcher;
 	private final Map<Long,NettyMessage.BufferResponse> inFlight = new HashMap<>();
+	private final Map<Long, IbvMr> registerdMRs;
 
 	public RdmaServerRequestHandler(RdmaServerEndpoint<RdmaShuffleServerEndpoint> serverEndpoint,
 									ResultPartitionProvider partitionProvider, TaskEventDispatcher
-										taskEventDispatcher, NettyBufferPool bufferPool) {
+										taskEventDispatcher, NettyBufferPool bufferPool, Map<Long, IbvMr> registerdMRs) {
 		this.serverEndpoint = serverEndpoint;
 		this.partitionProvider = partitionProvider;
 		this.taskEventDispatcher = taskEventDispatcher;
 		this.bufferPool = bufferPool;
+		this.registerdMRs= registerdMRs;
 	}
 
 	@Override
@@ -50,7 +53,8 @@ public class RdmaServerRequestHandler implements Runnable {
 		while (!stopped) {
 			try {
 				RdmaShuffleServerEndpoint clientEndpoint = serverEndpoint.accept();
-				RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
+				RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, workRequestId);
+				clientEndpoint.setRegisteredMRs(registerdMRs);
 				// TODO (venkat): Handle accepted connection, not using thread pool as it is only proto-type with 4
 				// servers
 				// Should be changed to configurable ThreadPool to work with more nodes.
@@ -104,6 +108,7 @@ public class RdmaServerRequestHandler implements Runnable {
 //					LOG.info("server more available: false on {}",reader);
 					reader.setRegisteredAsAvailable(false);
 				}
+				next.buffer().getMemorySegment();
 //				LOG.info("Sending BufferResponse message");
 				NettyMessage.BufferResponse msg = new NettyMessage.BufferResponse(
 					next.buffer(),
@@ -140,7 +145,7 @@ public class RdmaServerRequestHandler implements Runnable {
 							LOG.error("Receive posting failed. reposting new receive request");
 //							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 						} else { // first receive succeeded. Read the data and repost the next message
-//							LOG.info("Received message from "+getEndpointStr(clientEndpoint));
+							LOG.info("Received message from "+getEndpointStr(clientEndpoint));
 							NettyMessage clientRequest = decodeMessageFromBuffer(clientEndpoint.getReceiveBuffer());
 							Class<?> msgClazz = clientRequest.getClass();
 							if (msgClazz == NettyMessage.CloseRequest.class) {
@@ -157,9 +162,9 @@ public class RdmaServerRequestHandler implements Runnable {
 										partitionProvider,
 										partitionRequest.partitionId,
 										partitionRequest.queueIndex);
-//									LOG.info("received partition request: " + partitionRequest.receiverId + " with " +
-//										"initial credit: " + partitionRequest.credit + "at endpoint: " +
-//										getEndpointStr(clientEndpoint));
+									LOG.info("received partition request: " + partitionRequest.receiverId + " with " +
+										"initial credit: " + partitionRequest.credit + "at endpoint: " +
+										getEndpointStr(clientEndpoint));
 									reader.addCredit(partitionRequest.credit);
 									readers.put(partitionRequest.receiverId, reader);
 								}
@@ -210,10 +215,10 @@ public class RdmaServerRequestHandler implements Runnable {
 						}
 						if (response !=null) {
 							response.releaseBuffer();
-							response.releaseTempBuf();
+//							response.releaseTempBuf();
 						}
 						// send completed, so clear the buffer
-						clientEndpoint.getSendBuffer().clear();
+//						clientEndpoint.getSendBuffer().clear();
 						// Send succeed does not require any action
 					} else {
 						LOG.error("failed to match any condition " + wc.getOpcode());
