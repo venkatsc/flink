@@ -347,9 +347,14 @@ class PartitionReaderClient implements Runnable {
 						// since RDMA writes to the direct memory, receiver buffer indexes starts at 0
 						// resulting in IndexOutOfBoundsException. To make it work, we need to set index to
 						// max segment size
-						receiveBuffer.writerIndex(((NetworkBuffer) receiveBuffer).getMemorySegment().size());
+						int segmentSize = ((NetworkBuffer) receiveBuffer).getMemorySegment().size();
+						receiveBuffer.writerIndex(segmentSize);
+						int headerStart = segmentSize - RdmaConnectionManager.DATA_MSG_HEADER_SIZE;
+
+						int magic = ((NetworkBuffer) receiveBuffer).getMemorySegment().getInt(headerStart+4);
+						LOG.info("Received magic number {} expected {}",magic,NettyMessage.MAGIC_NUMBER);
 						receiveBuffer.readInt(); // discard frame length
-						int magic = receiveBuffer.readInt();
+//						int magic = receiveBuffer.readInt();
 						if (magic!= NettyMessage.MAGIC_NUMBER){
 							LOG.error("Magic number mistmatch expected: {} got: {} on receiver {}",NettyMessage.MAGIC_NUMBER,magic,inputChannel.getInputChannelId());
 							receiveBuffer.release();

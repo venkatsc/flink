@@ -40,11 +40,13 @@ import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel
 public class RdmaSendReceiveUtil {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaSendReceiveUtil.class);
 
-	public static void postSendReqForBufferResponse(RdmaActiveEndpoint endpoint, long workReqId,NettyMessage.BufferResponse response) throws IOException {
+	public static void postSendReqForBufferResponse(RdmaActiveEndpoint endpoint, long workReqId, NettyMessage
+		.BufferResponse response) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
-//			LOG.info("posting server send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
+//			LOG.info("posting server send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: "
+// +endpoint.getDstAddr());
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 
 //			int magic = response.getHeaderBuf().readInt();
@@ -53,27 +55,33 @@ public class RdmaSendReceiveUtil {
 //			}
 			ByteBuf buf = response.getBuffer();
 			MemorySegment segment;
-			long dataaddress ;
-			if (buf instanceof NetworkBuffer){
+			long dataaddress;
+			if (buf instanceof NetworkBuffer) {
 				segment = ((NetworkBuffer) buf).getMemorySegment();
 				dataaddress = ((NetworkBuffer) buf).memoryAddress();
-			}else if(buf instanceof ReadOnlySlicedNetworkBuffer){
+			} else if (buf instanceof ReadOnlySlicedNetworkBuffer) {
 				segment = ((ReadOnlySlicedNetworkBuffer) buf).getMemorySegment();
-				dataaddress = ((ReadOnlySlicedNetworkBuffer) buf).memoryAddress()+((ReadOnlySlicedNetworkBuffer) buf).getMemorySegmentOffset();
-			}else{
+				dataaddress = ((ReadOnlySlicedNetworkBuffer) buf).memoryAddress() + ((ReadOnlySlicedNetworkBuffer)
+					buf).getMemorySegmentOffset();
+			} else {
 				throw new IOException("Received unidentified network buffer type");
 			}
 			// header is at the end of segment
-//			int start = segment.size()-RdmaConnectionManager.DATA_MSG_HEADER_SIZE;
+			int start = segment.size() - RdmaConnectionManager.DATA_MSG_HEADER_SIZE;
+			LOG.info("SRUtil: Header start address {}, end address {} buffer length {} sent magic {}", segment.getAddress() + start,
+				segment.getAddress() + segment.size(),buf.writerIndex(),segment.getInt(start+4));
+
 //			IbvSge headerSGE = new IbvSge();
-//			headerSGE.setAddr(segment.getAddress()+start);
-//			headerSGE.setLength(RdmaConnectionManager.DATA_MSG_HEADER_SIZE-1);
+//			headerSGE.setAddr(segment.getAddress() + start);
+//			headerSGE.setLength(RdmaConnectionManager.DATA_MSG_HEADER_SIZE - 1);
 //			headerSGE.setLkey(clientEndpoint.getRegisteredMRs().get(segment.getAddress()).getLkey());
 //			sges.add(headerSGE);
 			// actual data
 			IbvSge dataSGE = new IbvSge();
-			dataSGE.setAddr(dataaddress);
-			dataSGE.setLength(buf.writerIndex());
+//			dataSGE.setAddr(dataaddress);
+// 			dataSGE.setLength(buf.writerIndex());
+			dataSGE.setAddr(segment.getAddress());
+			dataSGE.setLength(segment.size());
 			dataSGE.setLkey(clientEndpoint.getRegisteredMRs().get(segment.getAddress()).getLkey());
 			sges.add(dataSGE);
 
@@ -88,9 +96,11 @@ public class RdmaSendReceiveUtil {
 //			}else{
 //				sendSGE1.setAddr(buffer.getMemorySegment().getAddress() + buffer.getMemorySegmentOffset());
 //				sendSGE1.setLength(buffer.writerIndex());
-//				sendSGE1.setLkey(clientEndpoint.getRegisteredMRs().get(buffer.getMemorySegment().getAddress() ).getLkey());
+//				sendSGE1.setLkey(clientEndpoint.getRegisteredMRs().get(buffer.getMemorySegment().getAddress() )
+// .getLkey());
 //				sges.add(sendSGE1);
-////				LOG.info("sending network buffer readable:{} capacity:{} writer index: {} getsize: {}",buffer.readableBytes(),buffer.capacity(),buffer.writerIndex(),buffer.getSize());
+////				LOG.info("sending network buffer readable:{} capacity:{} writer index: {} getsize: {}",buffer
+// .readableBytes(),buffer.capacity(),buffer.writerIndex(),buffer.getSize());
 //			}
 
 			// Create send Work Request (WR)
@@ -114,7 +124,8 @@ public class RdmaSendReceiveUtil {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
-//			LOG.info("posting server send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
+//			LOG.info("posting server send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: "
+// +endpoint.getDstAddr());
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge sendSGE = new IbvSge();
 			sendSGE.setAddr(((DirectBuffer) clientEndpoint.getSendBuffer()).address());
@@ -138,7 +149,8 @@ public class RdmaSendReceiveUtil {
 			clientEndpoint.postSend(sendWRs).execute().free();
 		} else if (endpoint instanceof RdmaShuffleClientEndpoint) {
 			RdmaShuffleClientEndpoint clientEndpoint = (RdmaShuffleClientEndpoint) endpoint;
-//			LOG.info("posting client send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
+//			LOG.info("posting client send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: "
+// +endpoint.getDstAddr());
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge sendSGE = new IbvSge();
 			sendSGE.setAddr(((DirectBuffer) clientEndpoint.getSendBuffer()).address());
@@ -165,7 +177,8 @@ public class RdmaSendReceiveUtil {
 	public static void postReceiveReq(RdmaActiveEndpoint endpoint, long workReqId) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
-//			LOG.info("posting server receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
+//			LOG.info("posting server receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest:
+// " +endpoint.getDstAddr());
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge recvSGE = new IbvSge();
@@ -182,7 +195,8 @@ public class RdmaSendReceiveUtil {
 			recvWRs.add(recvWR);
 			endpoint.postRecv(recvWRs).execute().free();
 		} else if (endpoint instanceof RdmaShuffleClientEndpoint) {
-//			LOG.info("posting client receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
+//			LOG.info("posting client receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest:
+// " +endpoint.getDstAddr());
 			RdmaShuffleClientEndpoint clientEndpoint = (RdmaShuffleClientEndpoint) endpoint;
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge recvSGE = new IbvSge();
@@ -201,10 +215,12 @@ public class RdmaSendReceiveUtil {
 		}
 	}
 
-	public static void postReceiveReqWithChannelBuf(RdmaActiveEndpoint endpoint, long workReqId,ByteBuf buffer) throws IOException {
+	public static void postReceiveReqWithChannelBuf(RdmaActiveEndpoint endpoint, long workReqId, ByteBuf buffer)
+		throws IOException {
 
 		if (endpoint instanceof RdmaShuffleClientEndpoint) {
-//			LOG.info("posting client receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest: " +endpoint.getDstAddr());
+//			LOG.info("posting client receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest:
+// " +endpoint.getDstAddr());
 			RdmaShuffleClientEndpoint clientEndpoint = (RdmaShuffleClientEndpoint) endpoint;
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge recvSGE = new IbvSge();

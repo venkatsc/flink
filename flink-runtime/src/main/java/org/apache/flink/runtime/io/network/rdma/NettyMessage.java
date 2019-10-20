@@ -415,10 +415,11 @@ public abstract class NettyMessage {
 					throw new IOException("GIVEN BUFFER IS NEITHER NETWORK NOR READONLY SLICED BUFFER. IT SHOULD NEVER HAPPEN.");
 				}
 				start=segment.size()-RdmaConnectionManager.DATA_MSG_HEADER_SIZE;
+				LOG.info("Header start address {} and end address {}",segment.getAddress()+start,segment.getAddress()+segment.size());
 				// Append segment at the end
 				segment.putInt(start,FRAME_HEADER_LENGTH + messageHeaderLength);
 				segment.putInt(start+4,MAGIC_NUMBER);
-				segment.putInt(start+8,ID);
+				segment.put(start+8,ID);
 				receiverId.writeTo(segment,start+9);
 				segment.putInt(start+25,sequenceNumber);
 				segment.putInt(start+29,backlog);

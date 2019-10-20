@@ -284,7 +284,7 @@ public class EventSerializer {
 		final ByteBuffer serializedEvent = EventSerializer.toSerializedEvent(event);
 		segment.put(0, serializedEvent.array());
 //		MemorySegment data = MemorySegmentFactory.wrap(serializedEvent.array());
-		return new BufferConsumer(segment, FreeingBufferRecycler.INSTANCE, false);
+		return new BufferConsumer(segment, FreeingBufferRecycler.INSTANCE, false,serializedEvent.array().length);
 	}
 
 	public static AbstractEvent fromBuffer(Buffer buffer, ClassLoader classLoader) throws IOException {
