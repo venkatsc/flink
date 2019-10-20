@@ -354,6 +354,7 @@ class PartitionReaderClient implements Runnable {
 						int magic = ((NetworkBuffer) receiveBuffer).getMemorySegment().getInt(headerStart+4);
 						LOG.info("Received magic number {} expected {}",magic,NettyMessage.MAGIC_NUMBER);
 						receiveBuffer.readInt(); // discard frame length
+						
 //						int magic = receiveBuffer.readInt();
 						if (magic!= NettyMessage.MAGIC_NUMBER){
 							LOG.error("Magic number mistmatch expected: {} got: {} on receiver {}",NettyMessage.MAGIC_NUMBER,magic,inputChannel.getInputChannelId());
