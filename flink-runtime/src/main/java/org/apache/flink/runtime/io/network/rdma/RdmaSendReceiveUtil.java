@@ -55,33 +55,35 @@ public class RdmaSendReceiveUtil {
 //			}
 			ByteBuf buf = response.getBuffer();
 			MemorySegment segment;
-			long dataaddress;
+			long dataAddress;
+			int dataLen;
 			if (buf instanceof NetworkBuffer) {
 				segment = ((NetworkBuffer) buf).getMemorySegment();
-				dataaddress = ((NetworkBuffer) buf).memoryAddress();
+				dataAddress = buf.memoryAddress();
+				dataLen = buf.writerIndex() - buf.readerIndex();
 			} else if (buf instanceof ReadOnlySlicedNetworkBuffer) {
 				segment = ((ReadOnlySlicedNetworkBuffer) buf).getMemorySegment();
-				dataaddress = ((ReadOnlySlicedNetworkBuffer) buf).memoryAddress() + ((ReadOnlySlicedNetworkBuffer)
-					buf).getMemorySegmentOffset();
+				dataAddress = segment.getAddress() + ((ReadOnlySlicedNetworkBuffer) buf).getMemorySegmentOffset();
+				dataLen = buf.writerIndex() - buf.readerIndex();
 			} else {
 				throw new IOException("Received unidentified network buffer type");
 			}
 			// header is at the end of segment
 			int start = segment.size() - RdmaConnectionManager.DATA_MSG_HEADER_SIZE;
-			LOG.info("SRUtil: Header start address {}, end address {} buffer length {} sent magic {}", segment.getAddress() + start,
-				segment.getAddress() + segment.size(),buf.writerIndex(),segment.getInt(start+4));
+//			LOG.info("SRUtil: Header start address {}, end address {} buffer length {} sent magic {} byte order {}", segment.getAddress() + start,
+//				segment.getAddress() + segment.size(),buf.writerIndex(),segment.getIntBigEndian(start+4),buf.order());
 
-//			IbvSge headerSGE = new IbvSge();
-//			headerSGE.setAddr(segment.getAddress() + start);
-//			headerSGE.setLength(RdmaConnectionManager.DATA_MSG_HEADER_SIZE - 1);
-//			headerSGE.setLkey(clientEndpoint.getRegisteredMRs().get(segment.getAddress()).getLkey());
-//			sges.add(headerSGE);
+			IbvSge headerSGE = new IbvSge();
+			headerSGE.setAddr(segment.getAddress() + start);
+			headerSGE.setLength(RdmaConnectionManager.DATA_MSG_HEADER_SIZE);
+			headerSGE.setLkey(clientEndpoint.getRegisteredMRs().get(segment.getAddress()).getLkey());
+			sges.add(headerSGE);
 			// actual data
 			IbvSge dataSGE = new IbvSge();
-//			dataSGE.setAddr(dataaddress);
-// 			dataSGE.setLength(buf.writerIndex());
-			dataSGE.setAddr(segment.getAddress());
-			dataSGE.setLength(segment.size());
+			dataSGE.setAddr(dataAddress);
+ 			dataSGE.setLength(dataLen);
+//			dataSGE.setAddr(segment.getAddress());
+//			dataSGE.setLength(segment.size());
 			dataSGE.setLkey(clientEndpoint.getRegisteredMRs().get(segment.getAddress()).getLkey());
 			sges.add(dataSGE);
 

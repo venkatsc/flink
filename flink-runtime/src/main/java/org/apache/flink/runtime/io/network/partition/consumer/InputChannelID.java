@@ -45,8 +45,8 @@ public class InputChannelID extends AbstractID {
 	}
 
 	public void writeTo(MemorySegment buf, int i) {
-		buf.putLong(i,this.lowerPart);
-		buf.putLong(i,this.upperPart);
+		buf.putLongBigEndian(i,this.lowerPart);
+		buf.putLongBigEndian(i,this.upperPart);
 	}
 
 	public void writeTo(ByteBuf buf) {

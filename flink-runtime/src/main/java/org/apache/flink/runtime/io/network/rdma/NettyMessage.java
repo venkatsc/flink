@@ -382,13 +382,13 @@ public abstract class NettyMessage {
 //				}
 
 				// only allocate header buffer - we will combine it with the data buffer below
-//				headerBuf = allocateBuffer(allocator, ID, messageHeaderLength, 0, false);
+//				ByteBuf headerBuf = allocateBuffer(allocator, ID, messageHeaderLength, 0, false);
 //				headerBuf = ByteBuffer.allocateDirect(FRAME_HEADER_LENGTH + messageHeaderLength);
 //				headerBuf.putInt(FRAME_HEADER_LENGTH + messageHeaderLength);
 //				headerBuf.putInt(MAGIC_NUMBER);
 //				headerBuf.put(ID);
 //				receiverId.writeTo(headerBuf);
-//				headerBuf.putInt(sequenceNumber);
+//				headerBuf.writeInt(sequenceNumber);
 //				headerBuf.putInt(backlog);
 //				headerBuf.put(isBuffer ? (byte) 1 : (byte) 0);
 //				headerBuf.put(moreAvailable ? (byte) 1 : (byte) 0);
@@ -415,17 +415,17 @@ public abstract class NettyMessage {
 					throw new IOException("GIVEN BUFFER IS NEITHER NETWORK NOR READONLY SLICED BUFFER. IT SHOULD NEVER HAPPEN.");
 				}
 				start=segment.size()-RdmaConnectionManager.DATA_MSG_HEADER_SIZE;
-				LOG.info("Header start address {} and end address {}",segment.getAddress()+start,segment.getAddress()+segment.size());
+//				LOG.info("Header start address {} and end address {}",segment.getAddress()+start,segment.getAddress()+segment.size());
 				// Append segment at the end
-				segment.putInt(start,FRAME_HEADER_LENGTH + messageHeaderLength);
-				segment.putInt(start+4,MAGIC_NUMBER);
+				segment.putIntBigEndian(start,FRAME_HEADER_LENGTH + messageHeaderLength);
+				segment.putIntBigEndian(start+4,MAGIC_NUMBER);
 				segment.put(start+8,ID);
 				receiverId.writeTo(segment,start+9);
-				segment.putInt(start+25,sequenceNumber);
-				segment.putInt(start+29,backlog);
+				segment.putIntBigEndian(start+25,sequenceNumber);
+				segment.putIntBigEndian(start+29,backlog);
 				segment.putBoolean(start+33,isBuffer);
 				segment.putBoolean(start+34,moreAvailable);
-				segment.putInt(start+35,buffer.readableBytes());
+				segment.putIntBigEndian(start+35,buffer.readableBytes());
 
 //				CompositeByteBuf composityBuf = allocator.compositeDirectBuffer();
 //				composityBuf.addComponent(headerBuf);
