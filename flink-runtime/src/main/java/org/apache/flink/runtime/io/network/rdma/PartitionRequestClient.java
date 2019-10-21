@@ -263,7 +263,9 @@ class PartitionReaderClient implements Runnable {
 			ByteBuf receiveBuffer = null;
 			try {
 //			ByteBuf receiveBuffer = (NetworkBuffer)inputChannel.getBufferProvider().requestBuffer();
-				receiveBuffer = (NetworkBuffer) inputChannel.getBufferProvider().requestBuffer();
+				// Should be taken from buffer queue for the crediting to work, otherwise buffers may not be added to
+				// the credit if there is no backlog
+				receiveBuffer = (NetworkBuffer) inputChannel.requestBuffer();
 				if (receiveBuffer != null) {
 					RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint, ++workRequestId, receiveBuffer);
 					receivedBuffers.addLast(receiveBuffer);
