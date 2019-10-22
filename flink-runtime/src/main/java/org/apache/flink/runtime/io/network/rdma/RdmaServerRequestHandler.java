@@ -260,7 +260,7 @@ public class RdmaServerRequestHandler implements Runnable {
 								if (response instanceof NettyMessage.BufferResponse) {
 									NettyMessage.BufferResponse tmpResp = (NettyMessage.BufferResponse)
 										response;
-									LOG.error(" Sending partition with seq. number: " + tmpResp.sequenceNumber + " receiver Id " + tmpResp.receiverId);
+//									LOG.error(" Sending partition with seq. number: " + tmpResp.sequenceNumber + " receiver Id " + tmpResp.receiverId);
 								} else {
 									LOG.info("skip: sending error message/close request");
 								}
@@ -280,6 +280,8 @@ public class RdmaServerRequestHandler implements Runnable {
 									clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
 									RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
 								}
+							}else{
+								break;
 							}
 						}
 					}

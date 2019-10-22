@@ -186,8 +186,8 @@ class PartitionRequestClientHandler {
 				if (bufferOrEvent.getSizeOfRetainedSlice() == 0) {
 					inputChannel.onEmptyBuffer(bufferOrEvent.sequenceNumber, -1);
 				}else {
+//					LOG.info("onBuffer " + bufferOrEvent.sequenceNumber + " receiver id " + bufferOrEvent.receiverId+ " backlog: "+bufferOrEvent.backlog);
 					inputChannel.onBuffer(bufferOrEvent.getResponseReadonlySlice(), bufferOrEvent.sequenceNumber, bufferOrEvent.backlog);
-					LOG.info("onBuffer finished " + bufferOrEvent.sequenceNumber + " receiver id " + bufferOrEvent.receiverId+ "backlog: "+bufferOrEvent.backlog);
 				}
 				//boolean readFinished= false;
 //				do {
@@ -206,7 +206,7 @@ class PartitionRequestClientHandler {
 //					}
 //				} while (!readFinished);
 			} else {
-				LOG.info("in event");
+//				LOG.info("in event");
 
 
 				// ---- Event -------------------------------------------------
