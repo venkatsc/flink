@@ -196,6 +196,9 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 	}
 
 	public void notifyCreditAvailable(RemoteInputChannel inputChannel) {
+		synchronized (inputChannel){
+			inputChannel.notifyAll();
+		}
 //		LOG.info("Credit available notification received on channel {}",inputChannel);
 //		clientHandler.notifyCreditAvailable(inputChannel);
 	}
@@ -308,7 +311,7 @@ class PartitionReaderClient implements Runnable {
 				if (availableCredit == 0) {
 					if (inputChannel.getUnannouncedCredit() > 0) {
 						int unannouncedCredit = inputChannel.getAndResetUnannouncedCredit();
-						LOG.info("Adding credit: {} on channel {}", unannouncedCredit, inputChannel);
+//						LOG.info("Adding credit: {} on channel {}", unannouncedCredit, inputChannel);
 						failed = postBuffers(unannouncedCredit);
 						msg = new NettyMessage.AddCredit(
 							inputChannel.getPartitionId(),
@@ -321,6 +324,9 @@ class PartitionReaderClient implements Runnable {
 //						LOG.info("No credit available on channel {}",availableCredit,inputChannel);
 						if (availableCredit == 0) {
 							// wait for the credit to be available, otherwise connection stucks in blocking
+							synchronized (inputChannel) {
+								inputChannel.wait();
+							}
 							continue;
 						}
 					}

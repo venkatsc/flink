@@ -145,7 +145,7 @@ public class RdmaServerRequestHandler implements Runnable {
 							LOG.error("Receive posting failed. reposting new receive request");
 //							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 						} else { // first receive succeeded. Read the data and repost the next message
-							LOG.info("Received message from "+getEndpointStr(clientEndpoint));
+//							LOG.info("Received message from "+getEndpointStr(clientEndpoint));
 							NettyMessage clientRequest = decodeMessageFromBuffer(clientEndpoint.getReceiveBuffer());
 							Class<?> msgClazz = clientRequest.getClass();
 							if (msgClazz == NettyMessage.CloseRequest.class) {
@@ -162,9 +162,9 @@ public class RdmaServerRequestHandler implements Runnable {
 										partitionProvider,
 										partitionRequest.partitionId,
 										partitionRequest.queueIndex);
-									LOG.info("received partition request: " + partitionRequest.receiverId + " with " +
-										"initial credit: " + partitionRequest.credit + "at endpoint: " +
-										getEndpointStr(clientEndpoint));
+//									LOG.info("received partition request: " + partitionRequest.receiverId + " with " +
+//										"initial credit: " + partitionRequest.credit + "at endpoint: " +
+//										getEndpointStr(clientEndpoint));
 									reader.addCredit(partitionRequest.credit);
 									readers.put(partitionRequest.receiverId, reader);
 								}
@@ -247,6 +247,13 @@ public class RdmaServerRequestHandler implements Runnable {
 			while (!clientEndpoint.isClosed()) {
 			try {
 					for (NetworkSequenceViewReader reader : readers.values()) {
+//						if (reader.isReleased()){ Should remove reader to exit, currently we are only doing single reader
+						// so it should be fine for now.
+//							readers.remove()
+//						}
+						if (reader.isReleased()){
+							break;
+						}
 						while (((SequenceNumberingViewReader) reader).hasCredit()) {
 							if (reader.isRegisteredAsAvailable()) {
 								NettyMessage response = readPartition(reader);
