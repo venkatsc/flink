@@ -78,10 +78,6 @@ public class RdmaConnectionManager implements ConnectionManager {
 		InterruptedException {
 		try {
 			PartitionRequestClientIf partitionRequestClient = partitionRequestClientFactory.createPartitionRequestClient(connectionId);
-			LOG.info("creating partition client for connection id "+ connectionId.toString());
-			if (partitionRequestClient==null){
-				LOG.error("empty part partition client");
-			}
 			return partitionRequestClient;
 		} catch (Exception e) {
 			LOG.error("Error occurred. Rethrowing it as IOException ",e);

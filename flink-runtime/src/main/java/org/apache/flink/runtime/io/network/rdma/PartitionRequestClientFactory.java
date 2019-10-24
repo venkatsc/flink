@@ -84,6 +84,7 @@ class PartitionRequestClientFactory {
 //					if (disposeRequestClient) {
 //						partitionRequestClient.disposeIfNotUsed();
 //					}
+			LOG.info("creating partition client {} for connection id {}",endpoint.getEndpointStr(), connectionId.toString());
 			clients.putIfAbsent(connectionId, client);
 		}
 		// Make sure to increment the reference count before handing a client

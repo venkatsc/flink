@@ -162,8 +162,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 
 		// TODO (venkat): this should be done in seperate thread (see SingleInputGate.java:494)
 		// input channels are iterated over, i.e; future operator has to wait for one by one completion
-		LOG.info("Requesting subpartition {} of partition {} with {} ms delay using reader client {}.",
-			subpartitionIndex, partitionId, delayMs, readerClient.toString());
+		LOG.info(readerClient.toString());
 
 //		clientHandler.addInputChannel(inputChannel);
 
