@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.io.network;
 
 import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
+import org.apache.flink.runtime.io.network.partition.consumer.InputChannel;
 
 /**
  * A connection manager implementation to bypass setup overhead for task managers running in local
@@ -31,7 +32,7 @@ public class LocalConnectionManager implements ConnectionManager {
 	}
 
 	@Override
-	public PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId) {
+	public PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId, InputChannel channel) {
 		return null;
 	}
 

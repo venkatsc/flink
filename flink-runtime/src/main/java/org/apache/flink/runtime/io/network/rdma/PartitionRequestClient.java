@@ -127,47 +127,15 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 		int delayMs) throws IOException {
 
 		checkNotClosed();
-//		try {
-//			LOG.info("posting partition request against "+getEndpointStr(clientEndpoint));
-//			final NettyMessage.PartitionRequest request = new NettyMessage.PartitionRequest(
-//				partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
-//			NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(request);
-//			LOG.info("partition request completed on "+ getEndpointStr(clientEndpoint));
-//			if (bufferResponseorEvent != null) {
-//				Class<?> msgClazz = bufferResponseorEvent.getClass();
-//				if (msgClazz == NettyMessage.BufferResponse.class) {
-//					LOG.info("got partition response from endpoint: " + getEndpointStr(clientEndpoint));
-//					NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) bufferResponseorEvent;
-//					try {
-//						// TODO (venkat): decode the message
-//						clientHandler.decodeMsg(bufferOrEvent, false, clientEndpoint, inputChannel);
-//					} catch (Throwable t) {
-//						LOG.error("decode failure ", t);
-//					}
-//				} else {
-//					LOG.info("received message type is not handled " + msgClazz.toString());
-//				}
-//			} else {
-//				LOG.error("received partition response is null and it should never be the case");
-//			}
-//		}catch (Exception e){
-//			LOG.error("failed client ",e);
-//			throw new IOException(e);
-//		}
-
 		PartitionReaderClient readerClient = new PartitionReaderClient(partitionId, subpartitionIndex, inputChannel,
 			delayMs, clientEndpoint, clientHandler);
-		Thread clientReaderThread = new Thread(readerClient);
-		clientReaderThread.start();
-
-		// TODO (venkat): this should be done in seperate thread (see SingleInputGate.java:494)
-		// input channels are iterated over, i.e; future operator has to wait for one by one completion
 		LOG.info(readerClient.toString());
 
-//		clientHandler.addInputChannel(inputChannel);
+		Thread clientReaderThread = new Thread(readerClient);
+		clientReaderThread.start();
+		// TODO (venkat): this should be done in seperate thread (see SingleInputGate.java:494)
+		// input channels are iterated over, i.e; future operator has to wait for one by one completion
 
-
-//		LOG.info("returned from partition request");
 		return null;
 	}
 
@@ -321,41 +289,23 @@ class PartitionReaderClient implements Runnable {
 						RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
 					} else {
 //						LOG.info("No credit available on channel {}",availableCredit,inputChannel);
-						if (availableCredit == 0) {
 							// wait for the credit to be available, otherwise connection stucks in blocking
 							synchronized (inputChannel) {
 								inputChannel.wait();
 							}
 							continue;
-						}
 					}
 				}
-//				long endTime = System.nanoTime();
-//				LOG.info("verification of credit toook {}ns ",endTime-startTime);
-//				startTime = System.nanoTime();
+
 				IbvWC wc = clientEndpoint.getWcEvents().take();
-//				endTime = System.nanoTime();
-//				LOG.info("dequeue receive event took {}ns",endTime-startTime);
-//				LOG.info("Took completion event with work id {} ", wc.getWr_id());
 				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 						LOG.error("Receive posting failed. reposting new receive request");
-//						RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 					} else {
-//						startTime = System.nanoTime();
 						// InfiniBand completes requests in FIFO, so we should have first buffer filled with the data
 						ByteBuf receiveBuffer = receivedBuffers.pollFirst();
-//						if (receiveBuffer.refCnt()==2) {
-//							receiveBuffer.release();
-//						}else if (receiveBuffer.refCnt()>2){
-//							LOG.info("Receive buffer ref count {}",receiveBuffer.refCnt());
-//						}
 						availableCredit--;
 						receiveBuffer.readerIndex();
-						// first receive succeeded. Read the data and repost the next message
-						// since RDMA writes to the direct memory, receiver buffer indexes starts at 0
-						// resulting in IndexOutOfBoundsException. To make it work, we need to set index to
-						// max segment size
 						int segmentSize = ((NetworkBuffer) receiveBuffer).getMemorySegment().size();
 						receiveBuffer.writerIndex(segmentSize);
 						receiveBuffer.readerIndex();
@@ -369,12 +319,8 @@ class PartitionReaderClient implements Runnable {
 							byte ID = receiveBuffer.readByte();
 							switch (ID) {
 								case NettyMessage.BufferResponse.ID:
-//									startTime= System.nanoTime();
 									clientHandler.decodeMsg(NettyMessage.BufferResponse.readFrom(receiveBuffer),
 										false, clientEndpoint, inputChannel, finished);
-//								int refCount= receiveBuffer.refCnt();
-//									endTime= System.nanoTime();
-//									LOG.info("decode message took {}ns",startTime-endTime);
 									break;
 								case NettyMessage.CloseRequest.ID:
 									LOG.info("closing on client side upon close request. Something might have gone " +
@@ -386,20 +332,13 @@ class PartitionReaderClient implements Runnable {
 									LOG.error(" Un-identified response type " + ID);
 							}
 						}
-//						endTime = System.nanoTime();
-//						LOG.info("Message processing delay {}ns",endTime-startTime);
 					}
 				} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 						LOG.error("Client: Send failed. reposting new send request request " + clientEndpoint
 							.getEndpointStr());
-//						RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
 					}
 					clientEndpoint.getSendBuffer().clear();
-//					if (buf.refCnt()>1) {
-//						buf.release();
-//					}
-					// Send succeed does not require any action
 				} else {
 					LOG.error("failed to match any condition " + wc.getOpcode());
 				}
@@ -410,27 +349,7 @@ class PartitionReaderClient implements Runnable {
 				} catch (Exception e1) {
 					LOG.error("failed get endpoint", e);
 				}
-//			throw new IOException(e);
 			}
-//			NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(request);
-//			LOG.info("partition request completed ",inputChannel);
-//			if (bufferResponseorEvent != null) {
-//				Class<?> msgClazz = bufferResponseorEvent.getClass();
-//				if (msgClazz == NettyMessage.BufferResponse.class) {
-//					LOG.info("got partition response {}", inputChannel);
-//					NettyMessage.BufferResponse bufferOrEvent = (NettyMessage.BufferResponse) bufferResponseorEvent;
-//					try {
-//						// TODO (venkat): decode the message
-//						clientHandler.decodeMsg(bufferOrEvent, false, clientEndpoint, inputChannel);
-//					} catch (Throwable t) {
-//						LOG.error("decode failure ", t);
-//					}
-//				} else {
-//					LOG.info("received message type is not handled " + msgClazz.toString());
-//				}
-//			} else {
-//				LOG.error("received partition response is null and it should never be the case");
-//			}
 		}
 		while (!inputChannel.isReleased() && !finished[0]); // TODO(venkat): we should close the connection on reaching
 		// EndOfPartitionEvent

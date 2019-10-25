@@ -522,8 +522,8 @@ public class SingleInputGate implements InputGate {
 				// look at inputChannel.requestSubpartition one message at a time
 				for (InputChannel inputChannel : inputChannels.values()) {
 					if (!inputChannel.isReleased()){
-						LOG.info("Requesting partition from channel " + inputChannel + " partition id: " + inputChannel
-							.getPartitionId() + " for task " + this.owningTaskName + "subpartition index "+ consumedSubpartitionIndex);
+//						LOG.info("Requesting partition from channel " + inputChannel + " partition id: " + inputChannel
+//							.getPartitionId() + " for task " + this.owningTaskName + "subpartition index "+ consumedSubpartitionIndex);
 						inputChannel.requestSubpartition(consumedSubpartitionIndex);
 					}
 
@@ -783,7 +783,7 @@ public class SingleInputGate implements InputGate {
 			inputGate.setInputChannel(partitionId.getPartitionId(), inputChannels[i]);
 		}
 
-		LOG.debug("{}: Created {} input channels (local: {}, remote: {}, unknown: {}).",
+		LOG.info("{}: Created {} input channels (local: {}, remote: {}, unknown: {}).",
 			owningTaskName,
 			inputChannels.length,
 			numLocalChannels,

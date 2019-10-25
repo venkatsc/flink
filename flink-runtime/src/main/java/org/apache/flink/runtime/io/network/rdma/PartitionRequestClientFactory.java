@@ -25,6 +25,7 @@ import org.apache.flink.runtime.io.network.ConnectionID;
 import org.apache.flink.runtime.io.network.PartitionRequestClientIf;
 import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
 import org.apache.flink.runtime.io.network.netty.NettyConfig;
+import org.apache.flink.runtime.io.network.partition.consumer.InputChannel;
 import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel;
 
 //import org.apache.flink.shaded.netty4.io.netty.channel.Channel;
@@ -62,38 +63,33 @@ class PartitionRequestClientFactory {
 	 * Atomically establishes a TCP connection to the given remote address and
 	 * creates a {@link PartitionRequestClient} instance for this connection.
 	 */
-	PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId) throws Exception {
-		Object entry;
-		PartitionRequestClient client = clients.get(connectionId);;
-		if (client == null) {
+	PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId, InputChannel channel) throws Exception {
+//		PartitionRequestClient client = clients.get(connectionId);
+//		if (client == null) {
 			// No channel yet. Create one, but watch out for a race.
 			// We create a "connecting future" and atomically add it to the map.
 			// Only the thread that really added it establishes the channel.
 			// The others need to wait on that original establisher's future.
-			synchronized (clients) { // let us start client connections in synchronous way, so that we don't have same
+//			synchronized (clients) { // let us start client connections in synchronous way, so that we don't have same
 				// target connection multiple times
-				client = clients.get(connectionId);;
-				if (client==null){
+//				client = clients.get(connectionId);
+//				if (client==null){
 					RdmaShuffleClientEndpoint endpoint = rdmaClient.start(connectionId.getAddress());
 					clientEndpoints.put(connectionId, endpoint);
-					client = new PartitionRequestClient(
+					PartitionRequestClient client = new PartitionRequestClient(
 						endpoint, clientHandler, connectionId, this);
-//					if (disposeRequestClient) {
-//						partitionRequestClient.disposeIfNotUsed();
-//					}
 					rdmaClient.start(connectionId.getAddress());
 					clients.putIfAbsent(connectionId, client);
 					LOG.info("creating partition client {} for connection id {}", endpoint.getEndpointStr(), connectionId.toString());
-				}
-
-			}
-		}
+//				}
+//			}
+//		}
 		// Make sure to increment the reference count before handing a client
 		// out to ensure correct bookkeeping for channel closing.
-		if (!client.incrementReferenceCounter()) {
-			destroyPartitionRequestClient(connectionId, client);
-			client = null;
-		}
+//		if (!client.incrementReferenceCounter()) {
+//			destroyPartitionRequestClient(connectionId, client);
+//			client = null;
+//		}
 		return client;
 	}
 

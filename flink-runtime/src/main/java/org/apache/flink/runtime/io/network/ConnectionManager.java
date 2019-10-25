@@ -19,6 +19,7 @@
 package org.apache.flink.runtime.io.network;
 
 import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
+import org.apache.flink.runtime.io.network.partition.consumer.InputChannel;
 
 import java.io.IOException;
 
@@ -34,7 +35,7 @@ public interface ConnectionManager {
 //	/**
 //	 * Creates a {@link PartitionRequestClient} instance for the given {@link ConnectionID}.
 //	 */
-	PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId) throws IOException, InterruptedException;
+	PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId, InputChannel channel) throws IOException, InterruptedException;
 
 	/**
 	 * Closes opened ChannelConnections in case of a resource release.

@@ -26,6 +26,7 @@ import org.apache.flink.runtime.io.network.ConnectionManager;
 import org.apache.flink.runtime.io.network.PartitionRequestClientIf;
 import org.apache.flink.runtime.io.network.TaskEventDispatcher;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
+import org.apache.flink.runtime.io.network.partition.consumer.InputChannel;
 
 import java.io.IOException;
 
@@ -63,7 +64,7 @@ public class NettyConnectionManager implements ConnectionManager {
 	}
 
 	@Override
-	public PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId) throws IOException, InterruptedException {
+	public PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId, InputChannel channel) throws IOException, InterruptedException {
 		return partitionRequestClientFactory.createPartitionRequestClient(connectionId);
 	}
 

@@ -261,7 +261,7 @@ public class PartitionRequestClientHandlerTest {
 			int initialBackoff,
 			int maxBackoff) throws Exception {
 		final ConnectionManager connectionManager = mock(ConnectionManager.class);
-		when(connectionManager.createPartitionRequestClient(any(ConnectionID.class)))
+		when(connectionManager.createPartitionRequestClient(any(ConnectionID.class), ))
 			.thenReturn(client);
 
 		ResultPartitionID partitionId = new ResultPartitionID();

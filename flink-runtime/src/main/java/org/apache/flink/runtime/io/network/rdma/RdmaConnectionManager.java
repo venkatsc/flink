@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.util.Map;
 
-import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.runtime.io.network.ConnectionID;
 import org.apache.flink.runtime.io.network.ConnectionManager;
 import org.apache.flink.runtime.io.network.PartitionRequestClientIf;
@@ -35,6 +34,7 @@ import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
 import org.apache.flink.runtime.io.network.netty.NettyConfig;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
+import org.apache.flink.runtime.io.network.partition.consumer.InputChannel;
 
 public class RdmaConnectionManager implements ConnectionManager {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaConnectionManager.class);
@@ -74,10 +74,10 @@ public class RdmaConnectionManager implements ConnectionManager {
 	}
 
 	@Override
-	public PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId) throws IOException,
+	public PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId, InputChannel channel) throws IOException,
 		InterruptedException {
 		try {
-			PartitionRequestClientIf partitionRequestClient = partitionRequestClientFactory.createPartitionRequestClient(connectionId);
+			PartitionRequestClientIf partitionRequestClient = partitionRequestClientFactory.createPartitionRequestClient(connectionId,channel);
 			return partitionRequestClient;
 		} catch (Exception e) {
 			LOG.error("Error occurred. Rethrowing it as IOException ",e);

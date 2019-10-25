@@ -84,7 +84,10 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 
 	@Override
 	public void addCredit(int credit) {
-		this.credit=credit;
+		synchronized (this) {
+			this.credit = credit;
+			this.notifyAll();
+		}
 	}
 
 	public void decrementCredit(){
@@ -96,10 +99,10 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 
 	@Override
 	public void setRegisteredAsAvailable(boolean isRegisteredAvailable) {
-		synchronized (this) {
+//		synchronized (this) {
 			this.isRegisteredAvailable = isRegisteredAvailable;
 //			this.notifyAll();
-		}
+//		}
 	}
 
 	@Override

@@ -64,7 +64,7 @@ public class InputChannelTestUtils {
 		final PartitionRequestClient mockClient = mock(PartitionRequestClient.class);
 
 		final ConnectionManager connManager = mock(ConnectionManager.class);
-		when(connManager.createPartitionRequestClient(any(ConnectionID.class))).thenReturn(mockClient);
+		when(connManager.createPartitionRequestClient(any(ConnectionID.class), )).thenReturn(mockClient);
 
 		return connManager;
 	}
