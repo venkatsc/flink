@@ -44,7 +44,7 @@ import java.util.concurrent.ConcurrentMap;
  */
 class PartitionRequestClientFactory {
 	private final HashMap<ConnectionID,RdmaShuffleClientEndpoint> clientEndpoints = new HashMap<>();
-	private final ConcurrentMap<ConnectionID, Object> clients = new ConcurrentHashMap<ConnectionID, Object>();
+	private final ConcurrentMap<ConnectionID, PartitionRequestClient> clients = new ConcurrentHashMap<ConnectionID, PartitionRequestClient>();
 	private static final Logger LOG = LoggerFactory.getLogger(PartitionRequestClientFactory.class);
 	private final NettyBufferPool bufferPool;
 	private PartitionRequestClientHandler clientHandler ;
@@ -64,28 +64,29 @@ class PartitionRequestClientFactory {
 	 */
 	PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId) throws Exception {
 		Object entry;
-		PartitionRequestClient client = null;
-		entry = clients.get(connectionId);
-		if (entry != null) {
-			// Existing channel or connecting channel
-			if (entry instanceof PartitionRequestClient) {
-				client = (PartitionRequestClient) entry;
-			}
-		} else {
+		PartitionRequestClient client = clients.get(connectionId);;
+		if (client == null) {
 			// No channel yet. Create one, but watch out for a race.
 			// We create a "connecting future" and atomically add it to the map.
 			// Only the thread that really added it establishes the channel.
 			// The others need to wait on that original establisher's future.
-			RdmaShuffleClientEndpoint endpoint= rdmaClient.start(connectionId.getAddress());
-			clientEndpoints.put(connectionId,endpoint);
-			rdmaClient.start(connectionId.getAddress());
-			client = new PartitionRequestClient(
-				endpoint, clientHandler, connectionId, this);
+			synchronized (clients) { // let us start client connections in synchronous way, so that we don't have same
+				// target connection multiple times
+				client = clients.get(connectionId);;
+				if (client==null){
+					RdmaShuffleClientEndpoint endpoint = rdmaClient.start(connectionId.getAddress());
+					clientEndpoints.put(connectionId, endpoint);
+					client = new PartitionRequestClient(
+						endpoint, clientHandler, connectionId, this);
 //					if (disposeRequestClient) {
 //						partitionRequestClient.disposeIfNotUsed();
 //					}
-			LOG.info("creating partition client {} for connection id {}",endpoint.getEndpointStr(), connectionId.toString());
-			clients.putIfAbsent(connectionId, client);
+					rdmaClient.start(connectionId.getAddress());
+					clients.putIfAbsent(connectionId, client);
+					LOG.info("creating partition client {} for connection id {}", endpoint.getEndpointStr(), connectionId.toString());
+				}
+
+			}
 		}
 		// Make sure to increment the reference count before handing a client
 		// out to ensure correct bookkeeping for channel closing.
