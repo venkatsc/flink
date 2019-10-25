@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 import org.apache.flink.shaded.netty4.io.netty.buffer.Unpooled;
@@ -54,7 +55,7 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 	private Map<Long,IbvMr> registeredMRs;
 
 	private ArrayBlockingQueue<IbvWC> wcEvents = new ArrayBlockingQueue<>(1000);
-	private static int workRequestId;
+	AtomicLong workRequestId = new AtomicLong(1);
 	private NettyBufferPool bufferPool;
 
 	private LastEvent lastEvent = new LastEvent();
@@ -145,60 +146,60 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 		return bufferPool;
 	}
 
-	public NettyMessage writeAndRead(NettyMessage msg){
-		NettyMessage response= null;
-		try {
-			ByteBuf buf = msg.write(bufferPool);
-			int takeEventsCount;
-			if (msg instanceof NettyMessage.CloseRequest){
-				takeEventsCount=1; // Don't block for response
-			}else{
-				takeEventsCount=2;
-			}
-			this.getSendBuffer().put(buf.nioBuffer());
-			RdmaSendReceiveUtil.postSendReq(this, ++workRequestId);
-			for (int i=0;i<takeEventsCount;i++) {
-				IbvWC wc = this.getWcEvents().take();
-				LOG.info("Took completion event {} ",i);
-				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
-					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-						LOG.error("Receive posting failed. reposting new receive request");
+//	public NettyMessage writeAndRead(NettyMessage msg){
+//		NettyMessage response= null;
+//		try {
+//			ByteBuf buf = msg.write(bufferPool);
+//			int takeEventsCount;
+//			if (msg instanceof NettyMessage.CloseRequest){
+//				takeEventsCount=1; // Don't block for response
+//			}else{
+//				takeEventsCount=2;
+//			}
+//			this.getSendBuffer().put(buf.nioBuffer());
+//			RdmaSendReceiveUtil.postSendReq(this, ++workRequestId);
+//			for (int i=0;i<takeEventsCount;i++) {
+//				IbvWC wc = this.getWcEvents().take();
+//				LOG.info("Took completion event {} ",i);
+//				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
+//					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
+//						LOG.error("Receive posting failed. reposting new receive request");
+////						RdmaSendReceiveUtil.postReceiveReq(this, ++workRequestId);
+//					} else { // first receive succeeded. Read the data and repost the next message
+//						this.getReceiveBuffer().getInt(); // discard frame length
+//						this.getReceiveBuffer().getInt(); // discard magic number
+//						byte ID =this.getReceiveBuffer().get();
+//						switch(ID){
+//							case NettyMessage.BufferResponse.ID:
+//								response = NettyMessage.BufferResponse.readFrom(Unpooled.wrappedBuffer(this.receiveBuffer));
+////								LOG.error(" Response received with seq.number: "+ ((NettyMessage.BufferResponse) response).sequenceNumber);
+//								break;
+//							default: LOG.error(" Un-identified request type "+ID);
+//						}
+//						this.getReceiveBuffer().clear();
 //						RdmaSendReceiveUtil.postReceiveReq(this, ++workRequestId);
-					} else { // first receive succeeded. Read the data and repost the next message
-						this.getReceiveBuffer().getInt(); // discard frame length
-						this.getReceiveBuffer().getInt(); // discard magic number
-						byte ID =this.getReceiveBuffer().get();
-						switch(ID){
-							case NettyMessage.BufferResponse.ID:
-								response = NettyMessage.BufferResponse.readFrom(Unpooled.wrappedBuffer(this.receiveBuffer));
-//								LOG.error(" Response received with seq.number: "+ ((NettyMessage.BufferResponse) response).sequenceNumber);
-								break;
-							default: LOG.error(" Un-identified request type "+ID);
-						}
-						this.getReceiveBuffer().clear();
-						RdmaSendReceiveUtil.postReceiveReq(this, ++workRequestId);
-					}
-				} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
-					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-						LOG.error("RdmaShuffle: Send failed. reposting new send request request");
-						RdmaSendReceiveUtil.postSendReq(this, ++workRequestId);
-					}
-					this.getSendBuffer().clear();
-					// Send succeed does not require any action
-				} else {
-					LOG.error("failed to match any condition " + wc.getOpcode());
-				}
-			}
-		} catch (Exception e) {
-			try {
-				LOG.error("failed client read "+getEndpointStr(), e);
-			} catch (Exception e1) {
-				LOG.error("failed get endpoint", e);
-			}
-//			throw new IOException(e);
-		}
-		return response;
-	}
+//					}
+//				} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
+//					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
+//						LOG.error("RdmaShuffle: Send failed. reposting new send request request");
+//						RdmaSendReceiveUtil.postSendReq(this, ++workRequestId);
+//					}
+//					this.getSendBuffer().clear();
+//					// Send succeed does not require any action
+//				} else {
+//					LOG.error("failed to match any condition " + wc.getOpcode());
+//				}
+//			}
+//		} catch (Exception e) {
+//			try {
+//				LOG.error("failed client read "+getEndpointStr(), e);
+//			} catch (Exception e1) {
+//				LOG.error("failed get endpoint", e);
+//			}
+////			throw new IOException(e);
+//		}
+//		return response;
+//	}
 
 	public String getEndpointStr() {
 		try {

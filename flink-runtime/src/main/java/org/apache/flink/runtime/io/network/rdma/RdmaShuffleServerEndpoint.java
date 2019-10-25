@@ -30,6 +30,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 
 public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
@@ -62,6 +64,7 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 	public IbvMr getRegisteredReceiveMemory() {
 		return registeredReceiveMemory;
 	}
+	AtomicLong workRequestId = new AtomicLong(1);
 
 	private class LastEvent {
 		private IbvWC lastEvent;

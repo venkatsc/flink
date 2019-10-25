@@ -51,7 +51,6 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 	private volatile ResultSubpartitionView subpartitionView;
 
 	private int sequenceNumber = -1;
-	private int availableSeqNumber=-1; // counts how many data available notifications raised.
 	private int credit= 0;
 	private boolean isRegisteredAvailable;
 
@@ -99,10 +98,10 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 
 	@Override
 	public void setRegisteredAsAvailable(boolean isRegisteredAvailable) {
-//		synchronized (this) {
+		synchronized (this) {
 			this.isRegisteredAvailable = isRegisteredAvailable;
-//			this.notifyAll();
-//		}
+			this.notifyAll();
+		}
 	}
 
 	@Override
@@ -161,7 +160,10 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 	@Override
 	public void notifyDataAvailable() {
 //		LOG.debug("Received data available notification "+this);//		requestQueue.notifyReaderNonEmpty(this); // TODO (venkat): Might read the data before available
-		this.setRegisteredAsAvailable(true);
+		synchronized (this) {
+			this.setRegisteredAsAvailable(true);
+			this.notifyAll();
+		}
 	}
 
 	@Override

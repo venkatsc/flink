@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.Unpooled;
@@ -23,19 +24,16 @@ import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
 import org.apache.flink.runtime.io.network.partition.ProducerFailedException;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
 import org.apache.flink.runtime.io.network.partition.consumer.InputChannel;
-import org.apache.flink.runtime.io.network.partition.consumer.InputChannelID;
 
 public class RdmaServerRequestHandler implements Runnable {
 	private boolean stopped = false;
 	private RdmaServerEndpoint<RdmaShuffleServerEndpoint> serverEndpoint;
-	private long workRequestId = 0;
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaServerRequestHandler.class);
 
 	private final NettyBufferPool bufferPool;
 	private NettyMessage.NettyMessageDecoder decoder = new NettyMessage.NettyMessageDecoder(false);
 	private final ResultPartitionProvider partitionProvider;
 	private final TaskEventDispatcher taskEventDispatcher;
-	private final Map<Long,NettyMessage.BufferResponse> inFlight = new HashMap<>();
 	private final Map<Long, IbvMr> registerdMRs;
 
 	public RdmaServerRequestHandler(RdmaServerEndpoint<RdmaShuffleServerEndpoint> serverEndpoint,
@@ -53,7 +51,7 @@ public class RdmaServerRequestHandler implements Runnable {
 		while (!stopped) {
 			try {
 				RdmaShuffleServerEndpoint clientEndpoint = serverEndpoint.accept();
-				RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, workRequestId);
+				RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, 0);
 				clientEndpoint.setRegisteredMRs(registerdMRs);
 				// TODO (venkat): Handle accepted connection, not using thread pool as it is only proto-type with 4
 				// servers
@@ -115,7 +113,7 @@ public class RdmaServerRequestHandler implements Runnable {
 		HandleClientConnection(RdmaShuffleServerEndpoint clientEndpoint) {
 			this.clientEndpoint = clientEndpoint;
 		}
-
+		private final ConcurrentHashMap<Long,NettyMessage.BufferResponse> inFlight = new ConcurrentHashMap<>();
 		@Override
 		public void run() {
 			try {
@@ -144,7 +142,7 @@ public class RdmaServerRequestHandler implements Runnable {
 									clientRequest;
 								reader = new SequenceNumberingViewReader(partitionRequest
 									.receiverId);
-									LOG.info("received partition request: " + partitionRequest.receiverId + " with " +
+								LOG.info("received partition request: " + partitionRequest.receiverId + " with " +
 										"initial credit: " + partitionRequest.credit + "at endpoint: " +
 										getEndpointStr(clientEndpoint));
 								reader.addCredit(partitionRequest.credit);
@@ -154,13 +152,13 @@ public class RdmaServerRequestHandler implements Runnable {
 									partitionRequest.queueIndex);
 								// we need to post receive for next message. for example credit
 								// TODO: We should do executor service here
-								new Thread(new RDMAWriter(reader,clientEndpoint)).start();
-								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
+								new Thread(new RDMAWriter(reader,clientEndpoint,inFlight)).start();
+								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet());
 								// TODO(venkat): do something better here, we should not poll reader
 							} else if (msgClazz == NettyMessage.TaskEventRequest.class) {
 								NettyMessage.TaskEventRequest request = (NettyMessage.TaskEventRequest) clientRequest;
 								LOG.error("Unhandled request type TaskEventRequest");
-								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
+								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet()); // post next
 								// receive
 								// TODO (venkat): Handle it
 								if (!taskEventDispatcher.publish(request.partitionId, request.event)) {
@@ -171,7 +169,7 @@ public class RdmaServerRequestHandler implements Runnable {
 								NettyMessage.CancelPartitionRequest request = (NettyMessage.CancelPartitionRequest)
 									clientRequest;
 								LOG.error("Unhandled request type CancelPartitionRequest");
-								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
+								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet()); // post next
 								// receive
 								// TODO (venkat): Handle it
 //							outboundQueue.cancel(request.receiverId);
@@ -179,15 +177,15 @@ public class RdmaServerRequestHandler implements Runnable {
 								NettyMessage.AddCredit request = (NettyMessage.AddCredit) clientRequest;
 //								NetworkSequenceViewReader reader = readers.get(request.receiverId);
 								if (reader!=null) {
+									LOG.info("Add credit: credit {} on the reader {}",request.credit,reader);
 									reader.addCredit(request.credit);
 								}
-								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
+								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet()); // post next
 								// receive
 								// TODO (venkat): Handle it
-//								LOG.error("Unhandled request type AddCredit");
 								// outboundQueue.addCredit(request.receiverId, request.credit);
 							} else {
-								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
+								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet()); // post next
 								// receive
 								LOG.warn("Received unexpected client request: {}", clientRequest);
 							}
@@ -200,12 +198,14 @@ public class RdmaServerRequestHandler implements Runnable {
 						}
 						NettyMessage.BufferResponse response;
 						synchronized (inFlight) {
-							response = inFlight.remove(wc.getWr_id());
+							long wc_id=wc.getWr_id();
+							response = inFlight.remove(wc_id);
+							if (response !=null) {
+								response.releaseBuffer();
+//								LOG.info("releasing buffer on send completion for WR {}",wc_id);
+							}
 						}
-						if (response !=null) {
-							response.releaseBuffer();
-//							response.releaseTempBuf();
-						}
+
 						// send completed, so clear the buffer
 //						clientEndpoint.getSendBuffer().clear();
 						// Send succeed does not require any action
@@ -226,9 +226,11 @@ public class RdmaServerRequestHandler implements Runnable {
 	private class RDMAWriter implements Runnable{
 		private  NetworkSequenceViewReader reader;
 		private RdmaShuffleServerEndpoint clientEndpoint;
-		public RDMAWriter(NetworkSequenceViewReader reader,RdmaShuffleServerEndpoint clientEndpoint){
+		private ConcurrentHashMap<Long,NettyMessage.BufferResponse> inFlight;
+		public RDMAWriter(NetworkSequenceViewReader reader,RdmaShuffleServerEndpoint clientEndpoint,ConcurrentHashMap<Long,NettyMessage.BufferResponse> inFlight){
 			this.reader= reader;
 			this.clientEndpoint = clientEndpoint;
+			this.inFlight = inFlight;
 		}
 
 		@Override
@@ -257,26 +259,31 @@ public class RdmaServerRequestHandler implements Runnable {
 									if (response instanceof NettyMessage.BufferResponse) {
 										NettyMessage.BufferResponse tmpResp = (NettyMessage.BufferResponse)
 											response;
-									LOG.error(" Sending partition with seq. number: " + tmpResp.sequenceNumber + " receiver Id " + tmpResp.receiverId);
 									} else {
 										LOG.info("skip: sending error message/close request");
 									}
 //								clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
-//							clientEndpoint.getReceiveBuffer().clear();
-//							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
+//								clientEndpoint.getReceiveBuffer().clear();
+//								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
 									// receive
 
 									// hold references of the response until the send completes
 									if (response instanceof NettyMessage.BufferResponse) {
 										response.write(bufferPool); // creates the header info
-										RdmaSendReceiveUtil.postSendReqForBufferResponse(clientEndpoint, ++workRequestId, (NettyMessage.BufferResponse) response);
+										long workRequestId= clientEndpoint.workRequestId.incrementAndGet();
 										synchronized (inFlight) {
+//											LOG.info("Add buffer to inFlight "+ workRequestId);
 											inFlight.put(workRequestId, (NettyMessage.BufferResponse) response);
 										}
+										RdmaSendReceiveUtil.postSendReqForBufferResponse(clientEndpoint,workRequestId , (NettyMessage.BufferResponse) response);
 									} else {
 										clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
-										RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+										RdmaSendReceiveUtil.postSendReq(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet());
 									}
+								}
+							}else {
+								synchronized (reader) {
+									reader.wait();
 								}
 							}
 						}

@@ -129,6 +129,16 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 
 		this.connectionId = checkNotNull(connectionId);
 		this.connectionManager = checkNotNull(connectionManager);
+		createRemoteNetworkChannel();
+	}
+
+	private void createRemoteNetworkChannel() {
+		try {
+			partitionRequestClient = connectionManager
+				.createPartitionRequestClient(connectionId, this);
+		}catch (Exception e){
+			LOG.error("failed setting up remote connection ",e);
+		}
 	}
 
 	/**
@@ -162,11 +172,10 @@ public class RemoteInputChannel extends InputChannel implements BufferRecycler, 
 	@VisibleForTesting
 	@Override
 	public void requestSubpartition(int subpartitionIndex) throws IOException, InterruptedException {
-		if (partitionRequestClient == null) {
-			// Create a client and request the partition
-			partitionRequestClient = connectionManager
-				.createPartitionRequestClient(connectionId, this);
-		}
+//		if (partitionRequestClient == null) {
+//			// Create a client and request the partition
+//
+//		}
 		partitionRequestClient.requestSubpartition(partitionId, subpartitionIndex, this, 0);
 	}
 

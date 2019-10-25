@@ -55,10 +55,6 @@ public class RdmaConnectionManager implements ConnectionManager {
 		this.rdmaConfig=rdmaConfig;
 		this.networkBufferPool=networkBufferPool;
 		this.server = new RdmaServer(rdmaConfig,bufferPool,networkBufferPool);
-
-//		this.client = new RdmaClient(rdmaConfig, new PartitionRequestClientHandler(), bufferPool);
-//		this.bufferPool = new NettyBufferPool(rdmaConfig.getNumberOfArenas());
-
 	}
 
 	@Override

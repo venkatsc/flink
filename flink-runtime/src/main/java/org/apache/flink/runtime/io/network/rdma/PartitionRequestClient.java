@@ -152,14 +152,14 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 		checkNotClosed();
 		LOG.info("Sending task events");
 		boolean[] finished = new boolean[1];
-		NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(new NettyMessage.TaskEventRequest(event,
-			partitionId, inputChannel.getInputChannelId()));
-
-		try {
-			clientHandler.decodeMsg(bufferResponseorEvent, false, clientEndpoint, inputChannel, finished);
-		} catch (Throwable t) {
-			LOG.error("decode failure ", t);
-		}
+//		NettyMessage bufferResponseorEvent = clientEndpoint.writeAndRead(new NettyMessage.TaskEventRequest(event,
+//			partitionId, inputChannel.getInputChannelId()));
+//
+//		try {
+//			clientHandler.decodeMsg(bufferResponseorEvent, false, clientEndpoint, inputChannel, finished);
+//		} catch (Throwable t) {
+//			LOG.error("decode failure ", t);
+//		}
 	}
 
 	public void notifyCreditAvailable(RemoteInputChannel inputChannel) {
@@ -177,7 +177,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 			//			tcpChannel.writeAndFlush(new NettyMessage.CloseRequest());
 			try {
 				LOG.info("sending client close request");
-				clientEndpoint.writeAndRead(new NettyMessage.CloseRequest()); // TODO(venkat): need clean way to write
+//				clientEndpoint.writeAndRead(new NettyMessage.CloseRequest()); // TODO(venkat): need clean way to write
 				// close request
 			} catch (Exception e) {
 				LOG.error("Failed sending close request ", e);

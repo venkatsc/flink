@@ -398,9 +398,10 @@ public class SingleInputGate implements InputGate {
 					throw new IllegalStateException("Tried to update unknown channel with unknown channel.");
 				}
 
-				LOG.debug("{}: Updated unknown input channel {} to {}.", owningTaskName, unknownChannel, newChannel);
+				LOG.info("{}: Updated unknown input channel {} to {}.", owningTaskName, unknownChannel, newChannel);
 
 				inputChannels.put(partitionId, newChannel);
+
 
 				if (requestedPartitionsFlag) {
 					newChannel.requestSubpartition(consumedSubpartitionIndex);
