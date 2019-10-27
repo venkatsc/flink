@@ -161,7 +161,7 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 	public void notifyDataAvailable() {
 //		LOG.debug("Received data available notification "+this);//		requestQueue.notifyReaderNonEmpty(this); // TODO (venkat): Might read the data before available
 		synchronized (this) {
-			this.setRegisteredAsAvailable(true);
+//			this.setRegisteredAsAvailable(true);
 			this.notifyAll();
 		}
 	}
@@ -172,7 +172,7 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 			"requestLock=" + requestLock +
 			", receiverId=" + receiverId +
 			", sequenceNumber=" + sequenceNumber +
-			", isRegisteredAsAvailable=" + isRegisteredAvailable +
+			", isAvailable=" + isAvailable() +
 			", credit="+credit+
 			'}';
 	}

@@ -55,9 +55,13 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.ArrayDeque;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
+
+//import scala.collection.mutable.HashMap;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 import org.apache.flink.shaded.netty4.io.netty.buffer.Unpooled;
@@ -212,7 +216,8 @@ class PartitionReaderClient implements Runnable {
 	private final RdmaShuffleClientEndpoint clientEndpoint;
 	private final PartitionRequestClientHandler clientHandler;
 	ArrayDeque<ByteBuf> receivedBuffers = new ArrayDeque<>();
-	private long workRequestId;
+	Map<Long,ByteBuf> inFlight = new HashMap<Long,ByteBuf>();
+//	private long workRequestId;
 
 	public PartitionReaderClient(final ResultPartitionID partitionId,
 								 final int subpartitionIndex,
@@ -237,7 +242,7 @@ class PartitionReaderClient implements Runnable {
 				// the credit if there is no backlog
 				receiveBuffer = (NetworkBuffer) inputChannel.requestBuffer();
 				if (receiveBuffer != null) {
-					RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint, ++workRequestId, receiveBuffer);
+					RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint,clientEndpoint.workRequestId.incrementAndGet(), receiveBuffer);
 					receivedBuffers.addLast(receiveBuffer);
 				} else {
 					LOG.error("Buffer from the channel is null");
@@ -265,7 +270,7 @@ class PartitionReaderClient implements Runnable {
 		try {
 			buf = msg.write(clientEndpoint.getNettyBufferpool());
 			clientEndpoint.getSendBuffer().put(buf.nioBuffer());
-			RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+			RdmaSendReceiveUtil.postSendReq(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet());
 		} catch (Exception ioe) {
 			LOG.error("Failed to serialize partition request");
 			return;
@@ -285,8 +290,12 @@ class PartitionReaderClient implements Runnable {
 							unannouncedCredit - failed,
 							inputChannel.getInputChannelId());
 						availableCredit += unannouncedCredit;
-						clientEndpoint.getSendBuffer().put(msg.write(clientEndpoint.getNettyBufferpool()).nioBuffer());
-						RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
+						ByteBuf message = msg.write(clientEndpoint.getNettyBufferpool());
+						// TODO: lurcking bug, if credit posted before sending out the previous credit, we might hold
+						clientEndpoint.getSendBuffer().put(message.nioBuffer());
+						long workID = clientEndpoint.workRequestId.incrementAndGet();
+						inFlight.put(workID,message);
+						RdmaSendReceiveUtil.postSendReq(clientEndpoint, workID);
 					} else {
 //						LOG.info("No credit available on channel {}",availableCredit,inputChannel);
 							// wait for the credit to be available, otherwise connection stucks in blocking
@@ -319,7 +328,11 @@ class PartitionReaderClient implements Runnable {
 							byte ID = receiveBuffer.readByte();
 							switch (ID) {
 								case NettyMessage.BufferResponse.ID:
-									clientHandler.decodeMsg(NettyMessage.BufferResponse.readFrom(receiveBuffer),
+									NettyMessage.BufferResponse bufferOrEvent =NettyMessage.BufferResponse.readFrom(receiveBuffer);
+//									LOG.info("Receive complete: " + wc.getWr_id() + "buff address: "+ receiveBuffer.memoryAddress() + " seq:" + bufferOrEvent
+//										.sequenceNumber + " receiver id " + bufferOrEvent.receiverId + " backlog: " +
+//										bufferOrEvent.backlog);
+									clientHandler.decodeMsg(bufferOrEvent,
 										false, clientEndpoint, inputChannel, finished);
 									break;
 								case NettyMessage.CloseRequest.ID:
@@ -337,6 +350,10 @@ class PartitionReaderClient implements Runnable {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 						LOG.error("Client: Send failed. reposting new send request request " + clientEndpoint
 							.getEndpointStr());
+					}
+					ByteBuf sendBufNetty =inFlight.get(wc.getWr_id());
+					if (sendBufNetty!=null){
+						sendBufNetty.release();
 					}
 					clientEndpoint.getSendBuffer().clear();
 				} else {

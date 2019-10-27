@@ -94,11 +94,11 @@ public class RdmaServerRequestHandler implements Runnable {
 			} else {
 				// This channel was now removed from the available reader queue.
 				// We re-add it into the queue if it is still available
-				if (next.moreAvailable()) {
-					reader.setRegisteredAsAvailable(true);
-				} else {
-					reader.setRegisteredAsAvailable(false);
-				}
+//				if (next.moreAvailable()) {
+//					reader.setRegisteredAsAvailable(true);
+//				} else {
+//					reader.setRegisteredAsAvailable(false);
+//				}
 				NettyMessage.BufferResponse msg = new NettyMessage.BufferResponse(
 					next.buffer(),
 					reader.getSequenceNumber(),
@@ -177,7 +177,7 @@ public class RdmaServerRequestHandler implements Runnable {
 								NettyMessage.AddCredit request = (NettyMessage.AddCredit) clientRequest;
 //								NetworkSequenceViewReader reader = readers.get(request.receiverId);
 								if (reader!=null) {
-									LOG.info("Add credit: credit {} on the reader {}",request.credit,reader);
+//									LOG.info("Add credit: credit {} on the reader {}",request.credit,reader);
 									reader.addCredit(request.credit);
 								}
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet()); // post next
@@ -199,10 +199,11 @@ public class RdmaServerRequestHandler implements Runnable {
 						NettyMessage.BufferResponse response;
 						synchronized (inFlight) {
 							long wc_id=wc.getWr_id();
+//							LOG.info("work request completed {}",wc_id);
 							response = inFlight.remove(wc_id);
 							if (response !=null) {
+//								LOG.info("releasing buffer on send completion for WR {} address {}",wc_id,response.getBuffer().memoryAddress());
 								response.releaseBuffer();
-//								LOG.info("releasing buffer on send completion for WR {}",wc_id);
 							}
 						}
 
@@ -246,14 +247,15 @@ public class RdmaServerRequestHandler implements Runnable {
 //							break;
 //						}
 						while (!reader.isReleased()) {
-							if (reader.isRegisteredAsAvailable()) {
+							if (reader.isAvailable()) {
 								if (((SequenceNumberingViewReader) reader).hasCredit()) {
 									NettyMessage response = readPartition(reader);
 									if (response == null) {
 										// False reader available is set, exit the reader here and write to the
 										// next reader with credit
-										break;
+//										break;
 //									response = new NettyMessage.CloseRequest();
+										LOG.info("should not be null");
 									}
 									((SequenceNumberingViewReader) reader).decrementCredit();
 									if (response instanceof NettyMessage.BufferResponse) {
@@ -272,7 +274,7 @@ public class RdmaServerRequestHandler implements Runnable {
 										response.write(bufferPool); // creates the header info
 										long workRequestId= clientEndpoint.workRequestId.incrementAndGet();
 										synchronized (inFlight) {
-//											LOG.info("Add buffer to inFlight "+ workRequestId);
+//											LOG.info("Add buffer to inFlight: wr {} memory address: {}", workRequestId,((NettyMessage.BufferResponse) response).getBuffer().memoryAddress());
 											inFlight.put(workRequestId, (NettyMessage.BufferResponse) response);
 										}
 										RdmaSendReceiveUtil.postSendReqForBufferResponse(clientEndpoint,workRequestId , (NettyMessage.BufferResponse) response);
