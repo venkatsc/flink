@@ -53,7 +53,7 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaServer.class);
 	private RdmaActiveEndpointGroup<RdmaShuffleServerEndpoint> endpointGroup;
 	private final NettyConfig rdmaConfig;
-	private int workRequestId = 1;
+//	private int workRequestId = 1;
 	private RdmaServerEndpoint<RdmaShuffleServerEndpoint> serverEndpoint;
 	private InetSocketAddress address;
 	private boolean stopped = false;
@@ -112,7 +112,7 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 	public void start(Map<Long,IbvMr> registerdMRs) throws IOException {
 		// create a EndpointGroup. The RdmaActiveEndpointGroup contains CQ processing and delivers CQ event to the
 		// endpoint.dispatchCqEvent() method.
-		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleServerEndpoint>(1000, false, 2000, 2, 100);
+		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleServerEndpoint>(1000, true, 2000, 2, 1000);
 		endpointGroup.init(this);
 		endpointGroup.getConnParam().setRnr_retry_count((byte)7);
 		// create a server endpoint

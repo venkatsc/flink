@@ -123,15 +123,21 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 //	public IbvMr getWholeMR(){
 //		return wholeMR;
 //	}
-
+public String getEndpointStr() {
+	try {
+		return "src: " + this.getSrcAddr() + " dst: " +
+			this.getDstAddr();
+	}catch (Exception e){
+		LOG.error("Failed to get the address on client endpoint");
+	}
+	return "";
+}
 	public ByteBuffer getReceiveBuffer() {
 		return this.receiveBuffer;
 	}
 
 	public ArrayBlockingQueue<IbvWC> getWcEvents() {
-		synchronized (this) {
 			return wcEvents;
-		}
 	}
 
 

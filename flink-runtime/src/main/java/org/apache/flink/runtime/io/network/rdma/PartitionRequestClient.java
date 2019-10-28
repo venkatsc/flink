@@ -215,7 +215,8 @@ class PartitionReaderClient implements Runnable {
 	private int delayMs;
 	private final RdmaShuffleClientEndpoint clientEndpoint;
 	private final PartitionRequestClientHandler clientHandler;
-	ArrayDeque<ByteBuf> receivedBuffers = new ArrayDeque<>();
+	private final Map<Long,ByteBuf> receivedBuffers = new HashMap<>();
+//	ArrayDeque<ByteBuf> receivedBuffers = new ArrayDeque<>();
 	Map<Long,ByteBuf> inFlight = new HashMap<Long,ByteBuf>();
 //	private long workRequestId;
 
@@ -242,8 +243,9 @@ class PartitionReaderClient implements Runnable {
 				// the credit if there is no backlog
 				receiveBuffer = (NetworkBuffer) inputChannel.requestBuffer();
 				if (receiveBuffer != null) {
-					RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint,clientEndpoint.workRequestId.incrementAndGet(), receiveBuffer);
-					receivedBuffers.addLast(receiveBuffer);
+					long id = clientEndpoint.workRequestId.incrementAndGet();
+					RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint,id, receiveBuffer);
+					receivedBuffers.put(id,receiveBuffer);
 				} else {
 					LOG.error("Buffer from the channel is null");
 				}
@@ -279,7 +281,7 @@ class PartitionReaderClient implements Runnable {
 			try {
 				// TODO: send credit if credit is reached zero
 //			for (int i=0;i<takeEventsCount;i++) {
-				long startTime = System.nanoTime();
+//				long startTime = System.nanoTime();
 				if (availableCredit == 0) {
 					if (inputChannel.getUnannouncedCredit() > 0) {
 						int unannouncedCredit = inputChannel.getAndResetUnannouncedCredit();
@@ -307,12 +309,13 @@ class PartitionReaderClient implements Runnable {
 				}
 
 				IbvWC wc = clientEndpoint.getWcEvents().take();
+//				LOG.info("took client event with wr_id {} on endpoint {}", wc.getWr_id(), clientEndpoint.getEndpointStr());
 				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 						LOG.error("Receive posting failed. reposting new receive request");
 					} else {
 						// InfiniBand completes requests in FIFO, so we should have first buffer filled with the data
-						ByteBuf receiveBuffer = receivedBuffers.pollFirst();
+						ByteBuf receiveBuffer = receivedBuffers.get(wc.getWr_id());
 						availableCredit--;
 						receiveBuffer.readerIndex();
 						int segmentSize = ((NetworkBuffer) receiveBuffer).getMemorySegment().size();

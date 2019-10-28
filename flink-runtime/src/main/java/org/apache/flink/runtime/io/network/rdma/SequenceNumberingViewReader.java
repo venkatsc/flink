@@ -18,12 +18,7 @@
 
 package org.apache.flink.runtime.io.network.rdma;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import java.io.IOException;
-import java.util.concurrent.atomic.AtomicInteger;
-
+import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.runtime.io.network.NetworkSequenceViewReader;
 import org.apache.flink.runtime.io.network.partition.BufferAvailabilityListener;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
@@ -34,6 +29,8 @@ import org.apache.flink.runtime.io.network.partition.consumer.InputChannel.Buffe
 import org.apache.flink.runtime.io.network.partition.consumer.InputChannelID;
 import org.apache.flink.runtime.io.network.partition.consumer.LocalInputChannel;
 
+import java.io.IOException;
+
 /**
  * Simple wrapper for the subpartition view used in the old network mode.
  *
@@ -41,22 +38,35 @@ import org.apache.flink.runtime.io.network.partition.consumer.LocalInputChannel;
  * handler about non-emptiness, similar to the {@link LocalInputChannel}.
  */
 class SequenceNumberingViewReader implements BufferAvailabilityListener, NetworkSequenceViewReader {
-	private static final Logger LOG = LoggerFactory.getLogger(SequenceNumberingViewReader.class);
-
 
 	private final Object requestLock = new Object();
 
 	private final InputChannelID receiverId;
 
+//	private final PartitionRequestQueue requestQueue;
+
 	private volatile ResultSubpartitionView subpartitionView;
 
-	private int sequenceNumber = -1;
-	private int credit= 0;
-	private boolean isRegisteredAvailable;
+	/**
+	 * The status indicating whether this reader is already enqueued in the pipeline for transferring
+	 * data or not.
+	 *
+	 * <p>It is mainly used to avoid repeated registrations but should be accessed by a single
+	 * thread only since there is no synchronisation.
+	 */
+	private boolean isRegisteredAsAvailable = false;
 
-	SequenceNumberingViewReader(InputChannelID receiverId) {
+	/** The number of available buffers for holding data on the consumer side. */
+	private int numCreditsAvailable;
+
+	private int sequenceNumber = -1;
+
+	SequenceNumberingViewReader(
+		InputChannelID receiverId,
+		int initialCredit) {
+
 		this.receiverId = receiverId;
-//		this.requestQueue = requestQueue;
+		this.numCreditsAvailable = initialCredit;
 	}
 
 	@Override
@@ -82,38 +92,49 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 	}
 
 	@Override
-	public void addCredit(int credit) {
+	public void addCredit(int creditDeltas) {
 		synchronized (this) {
-			this.credit = credit;
+			numCreditsAvailable += creditDeltas;
+			// Reader thread could be waiting for the release on credit
 			this.notifyAll();
 		}
-	}
-
-	public void decrementCredit(){
-		this.credit--;
-	}
-	public boolean hasCredit(){
-		return credit>0 ;
 	}
 
 	@Override
 	public void setRegisteredAsAvailable(boolean isRegisteredAvailable) {
-		synchronized (this) {
-			this.isRegisteredAvailable = isRegisteredAvailable;
-			this.notifyAll();
-		}
+		this.isRegisteredAsAvailable = isRegisteredAvailable;
 	}
 
 	@Override
 	public boolean isRegisteredAsAvailable() {
-		synchronized (this) {
-			return isRegisteredAvailable;
-		}
+		return isRegisteredAsAvailable;
 	}
 
+	/**
+	 * Returns true only if the next buffer is an event or the reader has both available
+	 * credits and buffers.
+	 */
 	@Override
 	public boolean isAvailable() {
-		return subpartitionView.isAvailable();
+		// BEWARE: this must be in sync with #isAvailable(BufferAndBacklog)!
+		return hasBuffersAvailable() &&
+			numCreditsAvailable > 0 ;
+	}
+
+	/**
+	 * Check whether this reader is available or not (internal use, in sync with
+	 * {@link #isAvailable()}, but slightly faster).
+	 *
+	 * <p>Returns true only if the next buffer is an event or the reader has both available
+	 * credits and buffers.
+	 *
+	 * @param bufferAndBacklog
+	 * 		current buffer and backlog including information about the next buffer
+	 */
+	private boolean isAvailable(BufferAndBacklog bufferAndBacklog) {
+		// BEWARE: this must be in sync with #isAvailable()!
+		return bufferAndBacklog.isMoreAvailable() &&
+			numCreditsAvailable > 0;
 	}
 
 	@Override
@@ -126,12 +147,28 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 		return sequenceNumber;
 	}
 
+	@VisibleForTesting
+	int getNumCreditsAvailable() {
+		return numCreditsAvailable;
+	}
+
+	@VisibleForTesting
+	boolean hasBuffersAvailable() {
+		return subpartitionView.isAvailable();
+	}
+
 	@Override
 	public BufferAndAvailability getNextBuffer() throws IOException, InterruptedException {
 		BufferAndBacklog next = subpartitionView.getNextBuffer();
 		if (next != null) {
 			sequenceNumber++;
-			return new BufferAndAvailability(next.buffer(), next.isMoreAvailable(), next.buffersInBacklog());
+
+			if (next.buffer().isBuffer() && --numCreditsAvailable < 0) {
+				throw new IllegalStateException("no credit available");
+			}
+
+			return new BufferAndAvailability(
+				next.buffer(), isAvailable(next), next.buffersInBacklog());
 		} else {
 			return null;
 		}
@@ -159,21 +196,19 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 
 	@Override
 	public void notifyDataAvailable() {
-//		LOG.debug("Received data available notification "+this);//		requestQueue.notifyReaderNonEmpty(this); // TODO (venkat): Might read the data before available
-		synchronized (this) {
-//			this.setRegisteredAsAvailable(true);
+		synchronized (this){
 			this.notifyAll();
 		}
 	}
 
 	@Override
 	public String toString() {
-		return "SequenceNumberingViewReader{" +
+		return "CreditBasedSequenceNumberingViewReader{" +
 			"requestLock=" + requestLock +
 			", receiverId=" + receiverId +
 			", sequenceNumber=" + sequenceNumber +
-			", isAvailable=" + isAvailable() +
-			", credit="+credit+
+			", numCreditsAvailable=" + numCreditsAvailable +
+			", isRegisteredAsAvailable=" + isRegisteredAsAvailable +
 			'}';
 	}
 }

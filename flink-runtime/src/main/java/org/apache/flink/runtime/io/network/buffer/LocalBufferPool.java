@@ -292,7 +292,7 @@ class LocalBufferPool implements BufferPool {
 					listener = registeredListeners.poll();
 					if (listener == null) {
 						availableMemorySegments.add(segment);
-						availableMemorySegments.notify();
+						availableMemorySegments.notifyAll();
 						return;
 					}
 				}
