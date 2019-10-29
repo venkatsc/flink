@@ -24,6 +24,7 @@ import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
 import org.apache.flink.runtime.io.network.partition.ProducerFailedException;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
 import org.apache.flink.runtime.io.network.partition.consumer.InputChannel;
+import org.apache.flink.runtime.io.network.rdma.exception.OutOfCredit;
 
 public class RdmaServerRequestHandler implements Runnable {
 	private boolean stopped = false;
@@ -95,11 +96,11 @@ public class RdmaServerRequestHandler implements Runnable {
 		} else {
 			// This channel was now removed from the available reader queue.
 			// We re-add it into the queue if it is still available
-				if (next.moreAvailable()) {
-					reader.setRegisteredAsAvailable(true);
-				} else {
-					reader.setRegisteredAsAvailable(false);
-				}
+//				if (next.moreAvailable()) {
+//					reader.setRegisteredAsAvailable(true);
+//				} else {
+//					reader.setRegisteredAsAvailable(false);
+//				}
 			NettyMessage.BufferResponse msg = new NettyMessage.BufferResponse(
 				next.buffer(),
 				reader.getSequenceNumber(),
@@ -190,7 +191,7 @@ public class RdmaServerRequestHandler implements Runnable {
 								NettyMessage.AddCredit request = (NettyMessage.AddCredit) clientRequest;
 //								NetworkSequenceViewReader reader = readers.get(request.receiverId);
 								if (reader != null) {
-//									LOG.info("Add credit: credit {} on the reader {}",request.credit,reader);
+									LOG.info("Add credit: credit {} on the reader {}",request.credit,reader);
 									reader.addCredit(request.credit);
 								}
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId
@@ -259,53 +260,46 @@ public class RdmaServerRequestHandler implements Runnable {
 			try {
 				while (!reader.isReleased()) {
 					if (reader.isAvailable()) {
-						NettyMessage response = readPartition(reader);
-						if (response == null) {
-							// False reader available is set, exit the reader here and write to the
-							// next reader with credit
-//										break;
-							LOG.info("should not be null: reader {} ", reader);
-							if (!reader.isReleased()) {
-								// false positiv, wait for reader to update some data
-								synchronized (reader) {
-									reader.wait();
+						while (true) {
+							NettyMessage response = null;
+							try {
+								response = readPartition(reader);
+							} catch (IOException e) {
+								if (e instanceof OutOfCredit) {
+									synchronized (reader) {
+										// out of credit so, wait for credit
+										// the notification could also come from data available notification
+										// . loop will ensure we will wait for the credit
+										reader.wait();
+										continue;
+									}
 								}
-							} else {
-								break;
 							}
-//									response = new NettyMessage.CloseRequest();
+							if (response == null) {
+								break; // we have drained the reader, we will wait for the next reader available
+								// notification
+							}
 
-						}
-						if (response instanceof NettyMessage.BufferResponse) {
-							NettyMessage.BufferResponse tmpResp = (NettyMessage.BufferResponse)
-								response;
-						} else {
-							LOG.info("skip: sending error message/close request");
-						}
-//								clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
-//								clientEndpoint.getReceiveBuffer().clear();
-//								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
-						// receive
-
-						// hold references of the response until the send completes
-						if (response instanceof NettyMessage.BufferResponse) {
-							response.write(bufferPool); // creates the header info
-							synchronized (inFlight) {
+							// hold references of the response until the send completes
+							if (response instanceof NettyMessage.BufferResponse) {
+								response.write(bufferPool); // creates the header info
 								long workRequestId = clientEndpoint.workRequestId.incrementAndGet();
-//								LOG.info("Add buffer to inFlight: wr {} memory address: {}", workRequestId, (
-//									(NettyMessage.BufferResponse) response).getBuffer().memoryAddress());
-								inFlight.put(workRequestId, (NettyMessage.BufferResponse) response);
+								synchronized (inFlight) {
+									inFlight.put(workRequestId, (NettyMessage.BufferResponse) response);
+								}
 								RdmaSendReceiveUtil.postSendReqForBufferResponse(clientEndpoint, workRequestId,
 									(NettyMessage.BufferResponse) response);
+							} else {
+								clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
+								RdmaSendReceiveUtil.postSendReq(clientEndpoint, clientEndpoint.workRequestId
+									.incrementAndGet());
 							}
-						} else {
-							clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
-							RdmaSendReceiveUtil.postSendReq(clientEndpoint, clientEndpoint.workRequestId
-								.incrementAndGet());
 						}
 					} else {
 						synchronized (reader) {
+//							LOG.info("blocking on reader unavailable {}", reader);
 							reader.wait();
+//							LOG.info("unblocking on reader available {}", reader);
 						}
 					}
 				}

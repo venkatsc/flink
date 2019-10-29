@@ -28,6 +28,7 @@ import org.apache.flink.runtime.io.network.partition.ResultSubpartitionView;
 import org.apache.flink.runtime.io.network.partition.consumer.InputChannel.BufferAndAvailability;
 import org.apache.flink.runtime.io.network.partition.consumer.InputChannelID;
 import org.apache.flink.runtime.io.network.partition.consumer.LocalInputChannel;
+import org.apache.flink.runtime.io.network.rdma.exception.OutOfCredit;
 
 import java.io.IOException;
 
@@ -159,14 +160,13 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 
 	@Override
 	public BufferAndAvailability getNextBuffer() throws IOException, InterruptedException {
+		if (numCreditsAvailable == 0) {
+			throw new OutOfCredit("no credit available on the reader");
+		}
 		BufferAndBacklog next = subpartitionView.getNextBuffer();
 		if (next != null) {
 			sequenceNumber++;
-
-			if (next.buffer().isBuffer() && --numCreditsAvailable < 0) {
-				throw new IllegalStateException("no credit available");
-			}
-
+			--numCreditsAvailable;
 			return new BufferAndAvailability(
 				next.buffer(), isAvailable(next), next.buffersInBacklog());
 		} else {
