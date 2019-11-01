@@ -78,7 +78,7 @@ class PartitionRequestClientFactory {
 					clientEndpoints.put(connectionId, endpoint);
 					PartitionRequestClient client = new PartitionRequestClient(
 						endpoint, clientHandler, connectionId, this);
-					rdmaClient.start(connectionId.getAddress());
+//					rdmaClient.start(connectionId.getAddress());
 					clients.putIfAbsent(connectionId, client);
 					LOG.info("creating partition client {} for connection id {}", endpoint.getEndpointStr(), connectionId.toString());
 //				}

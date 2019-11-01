@@ -49,6 +49,7 @@ import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel
 import org.apache.flink.runtime.util.AtomicDisposableReferenceCounter;
 
 import com.ibm.disni.verbs.IbvWC;
+import com.ibm.disni.verbs.StatefulVerbCall;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -218,6 +219,7 @@ class PartitionReaderClient implements Runnable {
 	private final Map<Long,ByteBuf> receivedBuffers = new HashMap<>();
 //	ArrayDeque<ByteBuf> receivedBuffers = new ArrayDeque<>();
 	Map<Long,ByteBuf> inFlight = new HashMap<Long,ByteBuf>();
+	Map<Long,StatefulVerbCall<? extends StatefulVerbCall<?>>> inFlightVerbs = new HashMap();
 //	private long workRequestId;
 
 	public PartitionReaderClient(final ResultPartitionID partitionId,
@@ -244,7 +246,7 @@ class PartitionReaderClient implements Runnable {
 				receiveBuffer = (NetworkBuffer) inputChannel.requestBuffer();
 				if (receiveBuffer != null) {
 					long id = clientEndpoint.workRequestId.incrementAndGet();
-					RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint,id, receiveBuffer);
+					RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint,id, receiveBuffer,inFlightVerbs);
 					receivedBuffers.put(id,receiveBuffer);
 				} else {
 					LOG.error("Buffer from the channel is null");
@@ -272,7 +274,7 @@ class PartitionReaderClient implements Runnable {
 		try {
 			buf = msg.write(clientEndpoint.getNettyBufferpool());
 			clientEndpoint.getSendBuffer().put(buf.nioBuffer());
-			RdmaSendReceiveUtil.postSendReq(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet());
+			RdmaSendReceiveUtil.postSendReq(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet(),inFlightVerbs);
 		} catch (Exception ioe) {
 			LOG.error("Failed to serialize partition request");
 			return;
@@ -297,7 +299,7 @@ class PartitionReaderClient implements Runnable {
 						clientEndpoint.getSendBuffer().put(message.nioBuffer());
 						long workID = clientEndpoint.workRequestId.incrementAndGet();
 						inFlight.put(workID,message);
-						RdmaSendReceiveUtil.postSendReq(clientEndpoint, workID);
+						RdmaSendReceiveUtil.postSendReq(clientEndpoint, workID,inFlightVerbs);
 					} else {
 //						LOG.info("No credit available on channel {}",availableCredit,inputChannel);
 							// wait for the credit to be available, otherwise connection stucks in blocking
@@ -309,6 +311,7 @@ class PartitionReaderClient implements Runnable {
 				}
 
 				IbvWC wc = clientEndpoint.getWcEvents().take();
+				inFlightVerbs.remove(wc.getWr_id()).free();
 //				LOG.info("took client event with wr_id {} on endpoint {}", wc.getWr_id(), clientEndpoint.getEndpointStr());
 				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {

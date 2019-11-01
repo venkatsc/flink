@@ -22,26 +22,30 @@ import com.ibm.disni.RdmaActiveEndpoint;
 import com.ibm.disni.verbs.IbvRecvWR;
 import com.ibm.disni.verbs.IbvSendWR;
 import com.ibm.disni.verbs.IbvSge;
+import com.ibm.disni.verbs.SVCPostRecv;
+import com.ibm.disni.verbs.SVCPostSend;
+import com.ibm.disni.verbs.StatefulVerbCall;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import sun.nio.ch.DirectBuffer;
 
 import java.io.IOException;
 import java.util.LinkedList;
+import java.util.Map;
 
 import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 
 import org.apache.flink.core.memory.MemorySegment;
-import org.apache.flink.runtime.io.network.buffer.Buffer;
 import org.apache.flink.runtime.io.network.buffer.NetworkBuffer;
 import org.apache.flink.runtime.io.network.buffer.ReadOnlySlicedNetworkBuffer;
-import org.apache.flink.runtime.io.network.partition.consumer.RemoteInputChannel;
 
 public class RdmaSendReceiveUtil {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaSendReceiveUtil.class);
 
 	public static void postSendReqForBufferResponse(RdmaActiveEndpoint endpoint, long workReqId, NettyMessage
-		.BufferResponse response) throws IOException {
+		.BufferResponse response,Map<Long, StatefulVerbCall<? extends
+		StatefulVerbCall<?>>>
+		inFlightVerbs) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
@@ -70,7 +74,8 @@ public class RdmaSendReceiveUtil {
 			}
 			// header is at the end of segment
 			int start = segment.size() - RdmaConnectionManager.DATA_MSG_HEADER_SIZE;
-//			LOG.info("SRUtil: Header start address {}, end address {} buffer length {} sent magic {} byte order {}", segment.getAddress() + start,
+//			LOG.info("SRUtil: Header start address {}, end address {} buffer length {} sent magic {} byte order {}",
+// segment.getAddress() + start,
 //				segment.getAddress() + segment.size(),buf.writerIndex(),segment.getIntBigEndian(start+4),buf.order());
 
 			IbvSge headerSGE = new IbvSge();
@@ -81,7 +86,7 @@ public class RdmaSendReceiveUtil {
 			// actual data
 			IbvSge dataSGE = new IbvSge();
 			dataSGE.setAddr(dataAddress);
- 			dataSGE.setLength(dataLen);
+			dataSGE.setLength(dataLen);
 //			dataSGE.setAddr(segment.getAddress());
 //			dataSGE.setLength(segment.size());
 			dataSGE.setLkey(clientEndpoint.getRegisteredMRs().get(segment.getAddress()).getLkey());
@@ -118,11 +123,16 @@ public class RdmaSendReceiveUtil {
 
 			LinkedList<IbvSendWR> sendWRs = new LinkedList<>();
 			sendWRs.add(sendWR);
-			clientEndpoint.postSend(sendWRs).execute().free();
+			SVCPostSend sendVerb = clientEndpoint.postSend(sendWRs).execute();
+			synchronized (inFlightVerbs) {
+				inFlightVerbs.put(workReqId, sendVerb);
+			}
 		}
 	}
 
-	public static void postSendReq(RdmaActiveEndpoint endpoint, long workReqId) throws IOException {
+	public static void postSendReq(RdmaActiveEndpoint endpoint, long workReqId, Map<Long, StatefulVerbCall<? extends
+		StatefulVerbCall<?>>>
+		inFlightVerbs) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
@@ -148,7 +158,10 @@ public class RdmaSendReceiveUtil {
 
 			LinkedList<IbvSendWR> sendWRs = new LinkedList<>();
 			sendWRs.add(sendWR);
-			clientEndpoint.postSend(sendWRs).execute().free();
+			SVCPostSend sendVerb = clientEndpoint.postSend(sendWRs).execute();
+			synchronized (inFlightVerbs) {
+				inFlightVerbs.put(workReqId, sendVerb);
+			}
 		} else if (endpoint instanceof RdmaShuffleClientEndpoint) {
 			RdmaShuffleClientEndpoint clientEndpoint = (RdmaShuffleClientEndpoint) endpoint;
 //			LOG.info("posting client send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: "
@@ -171,12 +184,16 @@ public class RdmaSendReceiveUtil {
 			sendWR.setSend_flags(IbvSendWR.IBV_SEND_SIGNALED);
 
 			LinkedList<IbvSendWR> sendWRs = new LinkedList<>();
-			sendWRs.add(sendWR);
-			clientEndpoint.postSend(sendWRs).execute().free();
+			SVCPostSend sendVerb = clientEndpoint.postSend(sendWRs).execute();
+			synchronized (inFlightVerbs) {
+				inFlightVerbs.put(workReqId, sendVerb);
+			}
 		}
 	}
 
-	public static void postReceiveReq(RdmaActiveEndpoint endpoint, long workReqId) throws IOException {
+	public static void postReceiveReq(RdmaActiveEndpoint endpoint, long workReqId, Map<Long, StatefulVerbCall<?
+		extends StatefulVerbCall<?>>>
+		inFlightVerbs) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 //			LOG.info("posting server receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest:
@@ -195,7 +212,10 @@ public class RdmaSendReceiveUtil {
 
 			LinkedList<IbvRecvWR> recvWRs = new LinkedList<>();
 			recvWRs.add(recvWR);
-			endpoint.postRecv(recvWRs).execute().free();
+			SVCPostRecv recvVerb = endpoint.postRecv(recvWRs).execute();
+			synchronized (inFlightVerbs) {
+				inFlightVerbs.put(workReqId, recvVerb);
+			}
 		} else if (endpoint instanceof RdmaShuffleClientEndpoint) {
 //			LOG.info("posting client receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest:
 // " +endpoint.getDstAddr());
@@ -213,11 +233,16 @@ public class RdmaSendReceiveUtil {
 
 			LinkedList<IbvRecvWR> recvWRs = new LinkedList<>();
 			recvWRs.add(recvWR);
-			endpoint.postRecv(recvWRs).execute().free();
+			SVCPostRecv recvVerb = endpoint.postRecv(recvWRs).execute();
+			synchronized (inFlightVerbs) {
+				inFlightVerbs.put(workReqId, recvVerb);
+			}
 		}
 	}
 
-	public static void postReceiveReqWithChannelBuf(RdmaActiveEndpoint endpoint, long workReqId, ByteBuf buffer)
+	public static void postReceiveReqWithChannelBuf(RdmaActiveEndpoint endpoint, long workReqId, ByteBuf buffer,
+													Map<Long, StatefulVerbCall<? extends StatefulVerbCall<?>>>
+														inFlightVerbs)
 		throws IOException {
 
 		if (endpoint instanceof RdmaShuffleClientEndpoint) {
@@ -237,7 +262,10 @@ public class RdmaSendReceiveUtil {
 
 			LinkedList<IbvRecvWR> recvWRs = new LinkedList<>();
 			recvWRs.add(recvWR);
-			endpoint.postRecv(recvWRs).execute().free();
+			SVCPostRecv recvVerb = endpoint.postRecv(recvWRs).execute();
+			synchronized (inFlightVerbs) {
+				inFlightVerbs.put(workReqId, recvVerb);
+			}
 		}
 	}
 
