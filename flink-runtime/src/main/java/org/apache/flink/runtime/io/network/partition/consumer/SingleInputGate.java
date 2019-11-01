@@ -623,13 +623,13 @@ public class SingleInputGate implements InputGate {
 				currentChannel.notifySubpartitionConsumed();
 				currentChannel.releaseAllResources();
 			}else if (WorkerDoneEvent.class.equals(event.getClass())){
-				LOG.debug("WorkerDoneEvent on channel {}",currentChannel);
+//				LOG.debug("WorkerDoneEvent on channel {}",currentChannel);
 			}else if (TerminationEvent.class.equals(event.getClass())){
-				LOG.debug("TerminationEvent on channel {}",currentChannel);
+//				LOG.debug("TerminationEvent on channel {}",currentChannel);
 			}else if (AllWorkersDoneEvent.class.equals(event.getClass())) {
-				LOG.debug("AllWorkersDoneEvent on channel {}",currentChannel);
+//				LOG.debug("AllWorkersDoneEvent on channel {}",currentChannel);
 			}else if (EndOfSuperstepEvent.class.equals(event.getClass())){
-				LOG.debug("EndOfSuperstepEvent on channel {}",currentChannel);
+//				LOG.debug("EndOfSuperstepEvent on channel {}",currentChannel);
 //				currentChannel.setReachedSuperStep();
 //				for (InputChannel channel: inputChannels.values()){
 //					LOG.debug("input channel {} on the input gate {} reached superstep {}",channel,this,channel.isReachedSuperStep());
