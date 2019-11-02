@@ -184,6 +184,7 @@ public class RdmaSendReceiveUtil {
 			sendWR.setSend_flags(IbvSendWR.IBV_SEND_SIGNALED);
 
 			LinkedList<IbvSendWR> sendWRs = new LinkedList<>();
+			sendWRs.add(sendWR);
 			SVCPostSend sendVerb = clientEndpoint.postSend(sendWRs).execute();
 			synchronized (inFlightVerbs) {
 				inFlightVerbs.put(workReqId, sendVerb);
