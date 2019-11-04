@@ -320,7 +320,7 @@ class PipelinedSubpartition extends ResultSubpartition {
 		// NOTE: isFinished() is not guaranteed to provide the most up-to-date state here
 		// worst-case: a single finished buffer sits around until the next flush() call
 		// (but we do not offer stronger guarantees anyway)
-		if (buffers.size() == 1 && buffers.peekLast().isFinished()) {
+		if (buffers.size() == 1 ) {
 			return 1;
 		}
 

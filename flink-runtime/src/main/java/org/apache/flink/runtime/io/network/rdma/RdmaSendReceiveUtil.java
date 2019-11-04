@@ -37,15 +37,16 @@ import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 
 import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.runtime.io.network.buffer.NetworkBuffer;
+import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 import org.apache.flink.runtime.io.network.buffer.ReadOnlySlicedNetworkBuffer;
 
 public class RdmaSendReceiveUtil {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaSendReceiveUtil.class);
 
 	public static void postSendReqForBufferResponse(RdmaActiveEndpoint endpoint, long workReqId, NettyMessage
-		.BufferResponse response,Map<Long, StatefulVerbCall<? extends
+		.BufferResponse response, Map<Long, StatefulVerbCall<? extends
 		StatefulVerbCall<?>>>
-		inFlightVerbs) throws IOException {
+														inFlightVerbs) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
@@ -73,15 +74,17 @@ public class RdmaSendReceiveUtil {
 				throw new IOException("Received unidentified network buffer type");
 			}
 			// header is at the end of segment
-			int start = segment.size() - RdmaConnectionManager.DATA_MSG_HEADER_SIZE;
-//			LOG.info("SRUtil: Header start address {}, end address {} buffer length {} sent magic {} byte order {}",
+			int start = response.headerBufPosition * RdmaConnectionManager.DATA_MSG_HEADER_SIZE;
+			long address = ((DirectBuffer) response.getHeaderBuffer()).address() + start;
+//			LOG.info("SRUtil: Header start address {}, seq: {} on connection {}", address, response.getHeaderBuffer()
+//				.getInt(start + 25),clientEndpoint.getEndpointStr());
 // segment.getAddress() + start,
 //				segment.getAddress() + segment.size(),buf.writerIndex(),segment.getIntBigEndian(start+4),buf.order());
 
 			IbvSge headerSGE = new IbvSge();
-			headerSGE.setAddr(segment.getAddress() + start);
+			headerSGE.setAddr(address);
 			headerSGE.setLength(RdmaConnectionManager.DATA_MSG_HEADER_SIZE);
-			headerSGE.setLkey(clientEndpoint.getRegisteredMRs().get(segment.getAddress()).getLkey());
+			headerSGE.setLkey(NetworkBufferPool.getHeaderMR().getLkey());
 			sges.add(headerSGE);
 			// actual data
 			IbvSge dataSGE = new IbvSge();

@@ -104,6 +104,7 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 			registerdMRs.put(segment.getAddress(),mr);
 			networkBufferPool.recycle(segment);
 		}
+		NetworkBufferPool.setHeaderBufferMR(endpoint.registerMemory(NetworkBufferPool.getBackingHeaderBuffer()).execute().getMr());
 		long end = System.nanoTime();
 		LOG.info("Server: Memory resgistration time for (in seconds): " + ((end
 			- start) / (1000.0*1000*1000)));

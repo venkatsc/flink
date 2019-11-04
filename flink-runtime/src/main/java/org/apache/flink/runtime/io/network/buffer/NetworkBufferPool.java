@@ -21,25 +21,31 @@ package org.apache.flink.runtime.io.network.buffer;
 import org.apache.flink.configuration.TaskManagerOptions;
 import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.core.memory.MemorySegmentFactory;
+import org.apache.flink.runtime.io.network.rdma.RdmaConnectionManager;
 import org.apache.flink.util.ExceptionUtils;
 import org.apache.flink.util.MathUtils;
 
+import com.ibm.disni.verbs.IbvMr;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
+import sun.nio.ch.DirectBuffer;
 
 /**
  * The NetworkBufferPool is a fixed size pool of {@link MemorySegment} instances
@@ -52,6 +58,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
 public class NetworkBufferPool implements BufferPoolFactory {
 
 	private static final Logger LOG = LoggerFactory.getLogger(NetworkBufferPool.class);
+	private static IbvMr headerMR;
 
 	private final int totalNumberOfMemorySegments;
 
@@ -68,6 +75,10 @@ public class NetworkBufferPool implements BufferPoolFactory {
 	private final Set<LocalBufferPool> allBufferPools = new HashSet<>();
 
 	private int numTotalRequiredBuffers;
+
+	private static ByteBuffer backingHeaderBuffer;
+
+	private static final BlockingQueue<Integer> headerBuffers = new LinkedBlockingQueue<>();
 
 	/**
 	 * Allocates all {@link MemorySegment} instances managed by this pool.
@@ -112,6 +123,37 @@ public class NetworkBufferPool implements BufferPoolFactory {
 
 		LOG.info("Allocated {} MB for network buffer pool (number of memory segments: {}, bytes per segment: {}).",
 				allocatedMb, availableMemorySegments.size(), segmentSize);
+
+		allocateHeaderBuffer(numberOfSegmentsToAllocate);
+	}
+
+	public static void reclaimHeaderBuffer(int headerBufPosition) {
+		headerBuffers.add(headerBufPosition);
+	}
+
+	public static void setHeaderBufferMR(IbvMr mr) {
+		headerMR = mr;
+	}
+
+	public static int getHeaderPosition() throws InterruptedException {
+		return headerBuffers.take();
+	}
+
+	public static ByteBuffer getBackingHeaderBuffer() {
+		return backingHeaderBuffer;
+	}
+
+	public static IbvMr getHeaderMR(){
+		return headerMR;
+	}
+
+
+	private void allocateHeaderBuffer(int numberOfSegmentsToAllocate) {
+		int sizeOfHeaderBufferPool= 2*numberOfSegmentsToAllocate;
+		backingHeaderBuffer = ByteBuffer.allocateDirect(sizeOfHeaderBufferPool*RdmaConnectionManager.DATA_MSG_HEADER_SIZE);
+		for(int i=0; i< sizeOfHeaderBufferPool;i++) {
+			headerBuffers.add(i);
+		}
 	}
 
 	@Nullable

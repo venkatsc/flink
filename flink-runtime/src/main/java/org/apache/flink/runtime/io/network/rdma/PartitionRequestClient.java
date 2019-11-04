@@ -59,6 +59,7 @@ import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -219,7 +220,7 @@ class PartitionReaderClient implements Runnable {
 	private final Map<Long,ByteBuf> receivedBuffers = new HashMap<>();
 //	ArrayDeque<ByteBuf> receivedBuffers = new ArrayDeque<>();
 	Map<Long,ByteBuf> inFlight = new HashMap<Long,ByteBuf>();
-	Map<Long,StatefulVerbCall<? extends StatefulVerbCall<?>>> inFlightVerbs = new HashMap();
+	Map<Long,StatefulVerbCall<? extends StatefulVerbCall<?>>> inFlightVerbs = new ConcurrentHashMap<>();
 //	private long workRequestId;
 
 	public PartitionReaderClient(final ResultPartitionID partitionId,
@@ -276,7 +277,7 @@ class PartitionReaderClient implements Runnable {
 			clientEndpoint.getSendBuffer().put(buf.nioBuffer());
 			RdmaSendReceiveUtil.postSendReq(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet(),inFlightVerbs);
 		} catch (Exception ioe) {
-			LOG.error("Failed to serialize partition request");
+			LOG.error("Failed to serialize partition request {}",ioe);
 			return;
 		}
 		do {

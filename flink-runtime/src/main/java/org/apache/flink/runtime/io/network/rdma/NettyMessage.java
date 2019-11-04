@@ -45,6 +45,7 @@ import org.apache.flink.runtime.executiongraph.ExecutionAttemptID;
 import org.apache.flink.runtime.io.network.api.serialization.EventSerializer;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
 import org.apache.flink.runtime.io.network.buffer.NetworkBuffer;
+import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 import org.apache.flink.runtime.io.network.buffer.ReadOnlySlicedNetworkBuffer;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
 import org.apache.flink.runtime.io.network.partition.consumer.InputChannel;
@@ -282,7 +283,18 @@ public abstract class NettyMessage {
 
 		final boolean isBuffer;
 
-		final boolean moreAvailable;
+		int headerBufPosition;
+
+		ByteBuffer headerBuffer;
+
+		public ByteBuffer getHeaderBuffer() {
+			return headerBuffer;
+		}
+
+		public int getHeaderBufPosition() {
+			return headerBufPosition;
+		}
+
 
 //		ByteBuf headerBuf = null;
 
@@ -295,13 +307,12 @@ public abstract class NettyMessage {
 			boolean isBuffer,
 			int sequenceNumber,
 			InputChannelID receiverId,
-			int backlog, boolean moreAvailable) {
+			int backlog) {
 			this.readonlySlicedResponse = buffer;
 //			this.buffer = checkNotNull(buffer);
 			this.isBuffer = isBuffer;
 			this.sequenceNumber = sequenceNumber;
 			this.receiverId = checkNotNull(receiverId);
-			this.moreAvailable = moreAvailable;
 			this.backlog = backlog;
 		}
 
@@ -309,13 +320,12 @@ public abstract class NettyMessage {
 			Buffer buffer,
 			int sequenceNumber,
 			InputChannelID receiverId,
-			int backlog, boolean moreAvailable) {
+			int backlog) {
 			this.buffer = checkNotNull(buffer).asByteBuf();
 			this.isBuffer = buffer.isBuffer();
 			this.sequenceNumber = sequenceNumber;
 			this.receiverId = checkNotNull(receiverId);
 			this.backlog = backlog;
-			this.moreAvailable = moreAvailable;
 		}
 
 //		ByteBuf getTempBuffer() {
@@ -338,6 +348,7 @@ public abstract class NettyMessage {
 
 		void releaseBuffer() {
 			buffer.release();
+			NetworkBufferPool.reclaimHeaderBuffer(headerBufPosition);
 		}
 
 		int getSizeOfRetainedSlice() {
@@ -401,26 +412,30 @@ public abstract class NettyMessage {
 				// Backing memory segment
 				MemorySegment segment;
 				int start;
-				if (buffer instanceof NetworkBuffer ){
-					segment = ((NetworkBuffer)buffer).getMemorySegment();
-				}else if (buffer instanceof ReadOnlySlicedNetworkBuffer){
-					segment = ((ReadOnlySlicedNetworkBuffer)buffer).getMemorySegment();
-				}
-				else {
-					throw new IOException("GIVEN BUFFER IS NEITHER NETWORK NOR READONLY SLICED BUFFER. IT SHOULD NEVER HAPPEN.");
-				}
-				start=segment.size()-RdmaConnectionManager.DATA_MSG_HEADER_SIZE;
+//				if (buffer instanceof NetworkBuffer ){
+//					segment = ((NetworkBuffer)buffer).getMemorySegment();
+//				}else if (buffer instanceof ReadOnlySlicedNetworkBuffer){
+//					segment = ((ReadOnlySlicedNetworkBuffer)buffer).getMemorySegment();
+//				}
+//				else {
+//					throw new IOException("GIVEN BUFFER IS NEITHER NETWORK NOR READONLY SLICED BUFFER. IT SHOULD NEVER HAPPEN.");
+//				}
+
+				headerBufPosition =  NetworkBufferPool.getHeaderPosition();
+				headerBuffer = NetworkBufferPool.getBackingHeaderBuffer();
+
+				start=headerBufPosition*RdmaConnectionManager.DATA_MSG_HEADER_SIZE;
 //				LOG.info("Header start address {} and end address {}",segment.getAddress()+start,segment.getAddress()+segment.size());
 				// Append segment at the end
-				segment.putIntBigEndian(start,FRAME_HEADER_LENGTH + messageHeaderLength);
-				segment.putIntBigEndian(start+4,MAGIC_NUMBER);
-				segment.put(start+8,ID);
-				receiverId.writeTo(segment,start+9);
-				segment.putIntBigEndian(start+25,sequenceNumber);
-				segment.putIntBigEndian(start+29,backlog);
-				segment.putBoolean(start+33,isBuffer);
-				segment.putBoolean(start+34,moreAvailable);
-				segment.putIntBigEndian(start+35,buffer.readableBytes());
+				headerBuffer.putInt(start,FRAME_HEADER_LENGTH + messageHeaderLength);
+				headerBuffer.putInt(start+4,MAGIC_NUMBER);
+				headerBuffer.put(start+8,ID);
+				receiverId.writeTo(headerBuffer,start+9);
+				headerBuffer.putInt(start+25,sequenceNumber);
+				headerBuffer.putInt(start+29,backlog);
+				headerBuffer.put(start+33,isBuffer?(byte)1:(byte)0);
+//				segment.putBoolean(start+34,moreAvailable);
+				headerBuffer.putInt(start+34,buffer.readableBytes());
 
 //				CompositeByteBuf composityBuf = allocator.compositeDirectBuffer();
 //				composityBuf.addComponent(headerBuf);
@@ -446,14 +461,14 @@ public abstract class NettyMessage {
 			int sequenceNumber = buffer.readInt();
 			int backlog = buffer.readInt();
 			boolean isBuffer = buffer.readBoolean();
-			boolean moreAvailable = buffer.readBoolean();
+//			boolean moreAvailable = buffer.readBoolean();
 			int size = buffer.readInt();
 
 //			Buffer retainedSlice = ((NetworkBuffer) buffer).readOnlySlice(((NetworkBuffer) buffer).getReaderIndex(),
 //				size);
 			Buffer retainedSlice = ((NetworkBuffer) buffer).readOnlySlice(RdmaConnectionManager.DATA_MSG_HEADER_SIZE,
 				size);
-			return new BufferResponse(retainedSlice, isBuffer, sequenceNumber, receiverId, backlog, moreAvailable);
+			return new BufferResponse(retainedSlice, isBuffer, sequenceNumber, receiverId, backlog);
 		}
 	}
 
