@@ -320,12 +320,12 @@ class PartitionReaderClient implements Runnable {
 					} else {
 						// InfiniBand completes requests in FIFO, so we should have first buffer filled with the data
 						ByteBuf receiveBuffer = receivedBuffers.get(wc.getWr_id());
-						availableCredit--;
+//						availableCredit--;
 						receiveBuffer.readerIndex();
 						int segmentSize = ((NetworkBuffer) receiveBuffer).getMemorySegment().size();
 						receiveBuffer.writerIndex(segmentSize);
 						receiveBuffer.readerIndex();
-						receiveBuffer.readInt(); // discard frame length
+//						  discard frame length
 						int magic = receiveBuffer.readInt();
 						if (magic != NettyMessage.MAGIC_NUMBER) {
 							LOG.error("Magic number mistmatch expected: {} got: {} on receiver {}", NettyMessage
@@ -336,6 +336,7 @@ class PartitionReaderClient implements Runnable {
 							switch (ID) {
 								case NettyMessage.BufferResponse.ID:
 									NettyMessage.BufferResponse bufferOrEvent =NettyMessage.BufferResponse.readFrom(receiveBuffer);
+									availableCredit = bufferOrEvent.availableCredit;
 //									LOG.info("Receive complete: " + wc.getWr_id() + "buff address: "+ receiveBuffer.memoryAddress() + " seq:" + bufferOrEvent
 //										.sequenceNumber + " receiver id " + bufferOrEvent.receiverId + " backlog: " +
 //										bufferOrEvent.backlog);

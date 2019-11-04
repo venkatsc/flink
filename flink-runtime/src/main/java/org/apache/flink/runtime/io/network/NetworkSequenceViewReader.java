@@ -45,6 +45,7 @@ public interface NetworkSequenceViewReader {
 	 */
 	void addCredit(int creditDeltas);
 
+	int getAvailableCredit();
 	/**
 	 * Checks whether this reader is available or not.
 	 *

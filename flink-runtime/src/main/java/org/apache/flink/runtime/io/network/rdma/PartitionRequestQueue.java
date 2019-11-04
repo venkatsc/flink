@@ -239,7 +239,7 @@ class PartitionRequestQueue {
 						next.buffer(),
 						reader.getSequenceNumber(),
 						reader.getReceiverId(),
-						next.buffersInBacklog());
+						next.buffersInBacklog(),reader.getAvailableCredit());
 
 					// Write and flush and wait until this is done before
 					// trying to continue with the next buffer.

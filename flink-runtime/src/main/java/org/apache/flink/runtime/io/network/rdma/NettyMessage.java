@@ -285,6 +285,8 @@ public abstract class NettyMessage {
 
 		int headerBufPosition;
 
+		int availableCredit;
+
 		ByteBuffer headerBuffer;
 
 		public ByteBuffer getHeaderBuffer() {
@@ -307,25 +309,27 @@ public abstract class NettyMessage {
 			boolean isBuffer,
 			int sequenceNumber,
 			InputChannelID receiverId,
-			int backlog) {
+			int backlog,int availableCredit) {
 			this.readonlySlicedResponse = buffer;
 //			this.buffer = checkNotNull(buffer);
 			this.isBuffer = isBuffer;
 			this.sequenceNumber = sequenceNumber;
 			this.receiverId = checkNotNull(receiverId);
 			this.backlog = backlog;
+			this.availableCredit = availableCredit;
 		}
 
 		BufferResponse(
 			Buffer buffer,
 			int sequenceNumber,
 			InputChannelID receiverId,
-			int backlog) {
+			int backlog,int availableCredit) {
 			this.buffer = checkNotNull(buffer).asByteBuf();
 			this.isBuffer = buffer.isBuffer();
 			this.sequenceNumber = sequenceNumber;
 			this.receiverId = checkNotNull(receiverId);
 			this.backlog = backlog;
+			this.availableCredit = availableCredit;
 		}
 
 //		ByteBuf getTempBuffer() {
@@ -427,9 +431,9 @@ public abstract class NettyMessage {
 				start=headerBufPosition*RdmaConnectionManager.DATA_MSG_HEADER_SIZE;
 //				LOG.info("Header start address {} and end address {}",segment.getAddress()+start,segment.getAddress()+segment.size());
 				// Append segment at the end
-				headerBuffer.putInt(start,FRAME_HEADER_LENGTH + messageHeaderLength);
-				headerBuffer.putInt(start+4,MAGIC_NUMBER);
-				headerBuffer.put(start+8,ID);
+				headerBuffer.putInt(start,MAGIC_NUMBER);
+				headerBuffer.put(start+4,ID);
+				headerBuffer.putInt(start+5,availableCredit);
 				receiverId.writeTo(headerBuffer,start+9);
 				headerBuffer.putInt(start+25,sequenceNumber);
 				headerBuffer.putInt(start+29,backlog);
@@ -457,6 +461,7 @@ public abstract class NettyMessage {
 		static BufferResponse readFrom(ByteBuf buffer) {
 			// TODO (venkat): we don't need it after using nio buffers instead of Netty buffers
 //			buffer.readByte(); // remove ID of wrapped buffer
+			int availableCredit = buffer.readInt();
 			InputChannelID receiverId = InputChannelID.fromByteBuf(buffer);
 			int sequenceNumber = buffer.readInt();
 			int backlog = buffer.readInt();
@@ -468,7 +473,7 @@ public abstract class NettyMessage {
 //				size);
 			Buffer retainedSlice = ((NetworkBuffer) buffer).readOnlySlice(RdmaConnectionManager.DATA_MSG_HEADER_SIZE,
 				size);
-			return new BufferResponse(retainedSlice, isBuffer, sequenceNumber, receiverId, backlog);
+			return new BufferResponse(retainedSlice, isBuffer, sequenceNumber, receiverId, backlog,availableCredit);
 		}
 	}
 

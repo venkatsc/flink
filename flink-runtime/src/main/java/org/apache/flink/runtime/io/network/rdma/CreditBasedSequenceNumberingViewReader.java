@@ -59,6 +59,7 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 
 	/** The number of available buffers for holding data on the consumer side. */
 	private AtomicInteger numCreditsAvailable;
+	private boolean initialized = false;
 
 	private int sequenceNumber = -1;
 
@@ -88,6 +89,8 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 					resultPartitionId,
 					subPartitionIndex,
 					this);
+				initialized=true;
+
 			} else {
 				throw new IllegalStateException("Subpartition already requested");
 			}
@@ -121,7 +124,7 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 	public boolean isAvailable() {
 		// BEWARE: this must be in sync with #isAvailable(BufferAndBacklog)!
 		boolean available = hasBuffersAvailable() &&
-			(numCreditsAvailable.get() > 0 || subpartitionView.nextBufferIsEvent());
+			(numCreditsAvailable.get() > 0 );
 		return available ;
 	}
 
@@ -138,7 +141,7 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 	private boolean isAvailable(BufferAndBacklog bufferAndBacklog) {
 		// BEWARE: this must be in sync with #isAvailable()!
 		boolean available = bufferAndBacklog.isMoreAvailable() &&
-			(numCreditsAvailable.get() > 0 || bufferAndBacklog.nextBufferIsEvent());
+			(numCreditsAvailable.get() > 0 );
 		return  available;
 	}
 
@@ -201,7 +204,9 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 
 	@Override
 	public void notifyDataAvailable() {
-		requestQueue.notifyReaderNonEmpty(this);
+		if (initialized) { // should only notify after this reader initialization complete
+			requestQueue.notifyReaderNonEmpty(this);
+		}
 	}
 
 	@Override
