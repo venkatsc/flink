@@ -99,6 +99,11 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 	}
 
 	@Override
+	public int getAvailableCredit() {
+		return numCreditsAvailable;
+	}
+
+	@Override
 	public void setRegisteredAsAvailable(boolean isRegisteredAvailable) {
 		this.isRegisteredAsAvailable = isRegisteredAvailable;
 	}

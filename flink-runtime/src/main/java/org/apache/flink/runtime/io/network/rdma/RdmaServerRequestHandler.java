@@ -77,38 +77,38 @@ public class RdmaServerRequestHandler implements Runnable {
 		return clientMessage;
 	}
 
-	private NettyMessage readPartition(NetworkSequenceViewReader reader) throws
-		IOException,
-		InterruptedException {
-		InputChannel.BufferAndAvailability next = null;
-		next = reader.getNextBuffer();
-		if (next == null) {
-			Throwable cause = reader.getFailureCause();
-			if (cause != null) {
-				NettyMessage.ErrorResponse msg = new NettyMessage.ErrorResponse(
-					new ProducerFailedException(cause),
-					reader.getReceiverId());
-				return msg;
-			} else {
-				// False available is set
-				return null;
-			}
-		} else {
-			// This channel was now removed from the available reader queue.
-			// We re-add it into the queue if it is still available
-			if (next.moreAvailable()) {
-				reader.setRegisteredAsAvailable(true);
-			} else {
-				reader.setRegisteredAsAvailable(false);
-			}
-			NettyMessage.BufferResponse msg = new NettyMessage.BufferResponse(
-				next.buffer(),
-				reader.getSequenceNumber(),
-				reader.getReceiverId(),
-				next.buffersInBacklog());
-			return msg;
-		}
-	}
+//	private NettyMessage readPartition(NetworkSequenceViewReader reader) throws
+//		IOException,
+//		InterruptedException {
+//		InputChannel.BufferAndAvailability next = null;
+//		next = reader.getNextBuffer();
+//		if (next == null) {
+//			Throwable cause = reader.getFailureCause();
+//			if (cause != null) {
+//				NettyMessage.ErrorResponse msg = new NettyMessage.ErrorResponse(
+//					new ProducerFailedException(cause),
+//					reader.getReceiverId());
+//				return msg;
+//			} else {
+//				// False available is set
+//				return null;
+//			}
+//		} else {
+//			// This channel was now removed from the available reader queue.
+//			// We re-add it into the queue if it is still available
+//			if (next.moreAvailable()) {
+//				reader.setRegisteredAsAvailable(true);
+//			} else {
+//				reader.setRegisteredAsAvailable(false);
+//			}
+//			NettyMessage.BufferResponse msg = new NettyMessage.BufferResponse(
+//				next.buffer(),
+//				reader.getSequenceNumber(),
+//				reader.getReceiverId(),
+//				next.buffersInBacklog());
+//			return msg;
+//		}
+//	}
 
 	private class HandleClientConnection implements Runnable {
 		RdmaShuffleServerEndpoint clientEndpoint;
@@ -200,7 +200,7 @@ public class RdmaServerRequestHandler implements Runnable {
 							} else if (msgClazz == NettyMessage.AddCredit.class) {
 								NettyMessage.AddCredit request = (NettyMessage.AddCredit) clientRequest;
 //								NetworkSequenceViewReader reader = readers.get(request.receiverId);
-//									LOG.info("Add credit: credit {} on the reader {}",request.credit,reader);
+								LOG.info("Add credit: credit {} on the {}",request.credit,clientEndpoint.getEndpointStr());
 								requestQueueOnCurrentConnection.addCredit(request.receiverId,request.credit);
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId
 									.incrementAndGet(), inFlightVerbs); // post next

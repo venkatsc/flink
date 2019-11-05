@@ -103,6 +103,11 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 	}
 
 	@Override
+	public int getAvailableCredit() {
+		return numCreditsAvailable.get();
+	}
+
+	@Override
 	public void setRegisteredAsAvailable(boolean isRegisteredAvailable) {
 		synchronized (this) {
 			this.isRegisteredAsAvailable = isRegisteredAvailable;
@@ -169,11 +174,10 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 	public BufferAndAvailability getNextBuffer() throws IOException, InterruptedException {
 		BufferAndBacklog next = subpartitionView.getNextBuffer();
 		if (next != null) {
-			sequenceNumber++;
-
-			if (next.buffer().isBuffer() && numCreditsAvailable.decrementAndGet() < 0) {
-				throw new IllegalStateException("no credit available");
+			if (numCreditsAvailable.decrementAndGet() < 0) {
+				throw new IllegalStateException("no credit available current. current seq: "+sequenceNumber);
 			}
+			sequenceNumber++;
 
 			return new BufferAndAvailability(
 				next.buffer(), isAvailable(next), next.buffersInBacklog());

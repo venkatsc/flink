@@ -140,9 +140,8 @@ class PartitionRequestQueue {
 
 		NetworkSequenceViewReader reader = allReaders.get(receiverId);
 		if (reader != null) {
-			reader.addCredit(credit);
-
-			enqueueAvailableReader(reader);
+				reader.addCredit(credit);
+				enqueueAvailableReader(reader);
 		} else {
 			throw new IllegalStateException("No reader for receiverId = " + receiverId + " exists.");
 		}
@@ -203,15 +202,21 @@ class PartitionRequestQueue {
 		BufferAndAvailability next = null;
 		try {
 			while (true) {
-				NetworkSequenceViewReader reader = pollAvailableReader();
 
-				// No queue with available data. We allow this here, because
-				// of the write callbacks that are executed after each write.
-				if (reader == null) {
-					return null;
+					NetworkSequenceViewReader reader = pollAvailableReader();
+
+					// No queue with available data. We allow this here, because
+					// of the write callbacks that are executed after each write.
+					if (reader == null) {
+						return null;
+					}
+				synchronized (reader) {
+					// Reader poll resets the status of registered without decrementing the credit.
+					// So, adding and enqueuing should be done as atomic. So that, there will not be
+					// duplicate enqueue for same credit.
+					reader.setRegisteredAsAvailable(false);
+					next = reader.getNextBuffer();
 				}
-
-				next = reader.getNextBuffer();
 				if (next == null) {
 					if (!reader.isReleased()) {
 						continue;
@@ -268,9 +273,6 @@ class PartitionRequestQueue {
 	@Nullable
 	private NetworkSequenceViewReader pollAvailableReader() {
 		NetworkSequenceViewReader reader = availableReaders.poll();
-		if (reader != null) {
-			reader.setRegisteredAsAvailable(false);
-		}
 		return reader;
 	}
 

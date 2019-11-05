@@ -285,7 +285,7 @@ class PartitionReaderClient implements Runnable {
 				// TODO: send credit if credit is reached zero
 //			for (int i=0;i<takeEventsCount;i++) {
 //				long startTime = System.nanoTime();
-				if (availableCredit == 0) {
+				if (availableCredit <= 0) {
 					if (inputChannel.getUnannouncedCredit() > 0) {
 						int unannouncedCredit = inputChannel.getAndResetUnannouncedCredit();
 //						LOG.info("Adding credit: {} on channel {}", unannouncedCredit, inputChannel);
@@ -295,6 +295,7 @@ class PartitionReaderClient implements Runnable {
 							unannouncedCredit - failed,
 							inputChannel.getInputChannelId());
 						availableCredit += unannouncedCredit;
+						LOG.info("Announced available credit: {}",availableCredit);
 						ByteBuf message = msg.write(clientEndpoint.getNettyBufferpool());
 						// TODO: lurcking bug, if credit posted before sending out the previous credit, we might hold
 						clientEndpoint.getSendBuffer().put(message.nioBuffer());

@@ -324,7 +324,7 @@ class PipelinedSubpartition extends ResultSubpartition {
 			return 1;
 		}
 
-		// We assume that only last buffer is not finished.
-		return Math.max(0, buffers.size() - 1);
+		// we don't need buffers to be finished
+		return Math.max(0, buffers.size());
 	}
 }

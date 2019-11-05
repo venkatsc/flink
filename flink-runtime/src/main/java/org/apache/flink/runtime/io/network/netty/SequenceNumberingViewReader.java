@@ -82,6 +82,11 @@ class SequenceNumberingViewReader implements BufferAvailabilityListener, Network
 	}
 
 	@Override
+	public int getAvailableCredit() {
+		return 0;
+	}
+
+	@Override
 	public void setRegisteredAsAvailable(boolean isRegisteredAvailable) {
 		this.isRegisteredAvailable = isRegisteredAvailable;
 	}
