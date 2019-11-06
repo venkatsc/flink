@@ -126,10 +126,10 @@ public class RdmaSendReceiveUtil {
 
 			LinkedList<IbvSendWR> sendWRs = new LinkedList<>();
 			sendWRs.add(sendWR);
-			SVCPostSend sendVerb = clientEndpoint.postSend(sendWRs).execute();
-			synchronized (inFlightVerbs) {
-				inFlightVerbs.put(workReqId, sendVerb);
-			}
+			clientEndpoint.postSend(sendWRs).execute().free();
+//			synchronized (inFlightVerbs) {
+//				inFlightVerbs.put(workReqId, sendVerb);
+//			}
 		}
 	}
 
@@ -161,10 +161,7 @@ public class RdmaSendReceiveUtil {
 
 			LinkedList<IbvSendWR> sendWRs = new LinkedList<>();
 			sendWRs.add(sendWR);
-			SVCPostSend sendVerb = clientEndpoint.postSend(sendWRs).execute();
-			synchronized (inFlightVerbs) {
-				inFlightVerbs.put(workReqId, sendVerb);
-			}
+			clientEndpoint.postSend(sendWRs).execute().free();
 		} else if (endpoint instanceof RdmaShuffleClientEndpoint) {
 			RdmaShuffleClientEndpoint clientEndpoint = (RdmaShuffleClientEndpoint) endpoint;
 //			LOG.info("posting client send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: "
@@ -188,10 +185,7 @@ public class RdmaSendReceiveUtil {
 
 			LinkedList<IbvSendWR> sendWRs = new LinkedList<>();
 			sendWRs.add(sendWR);
-			SVCPostSend sendVerb = clientEndpoint.postSend(sendWRs).execute();
-			synchronized (inFlightVerbs) {
-				inFlightVerbs.put(workReqId, sendVerb);
-			}
+			clientEndpoint.postSend(sendWRs).execute().free();
 		}
 	}
 
@@ -216,10 +210,7 @@ public class RdmaSendReceiveUtil {
 
 			LinkedList<IbvRecvWR> recvWRs = new LinkedList<>();
 			recvWRs.add(recvWR);
-			SVCPostRecv recvVerb = endpoint.postRecv(recvWRs).execute();
-			synchronized (inFlightVerbs) {
-				inFlightVerbs.put(workReqId, recvVerb);
-			}
+			endpoint.postRecv(recvWRs).execute().free();
 		} else if (endpoint instanceof RdmaShuffleClientEndpoint) {
 //			LOG.info("posting client receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest:
 // " +endpoint.getDstAddr());
@@ -237,10 +228,7 @@ public class RdmaSendReceiveUtil {
 
 			LinkedList<IbvRecvWR> recvWRs = new LinkedList<>();
 			recvWRs.add(recvWR);
-			SVCPostRecv recvVerb = endpoint.postRecv(recvWRs).execute();
-			synchronized (inFlightVerbs) {
-				inFlightVerbs.put(workReqId, recvVerb);
-			}
+			endpoint.postRecv(recvWRs).execute().free();
 		}
 	}
 
@@ -266,11 +254,8 @@ public class RdmaSendReceiveUtil {
 
 			LinkedList<IbvRecvWR> recvWRs = new LinkedList<>();
 			recvWRs.add(recvWR);
-			SVCPostRecv recvVerb = endpoint.postRecv(recvWRs).execute();
-			synchronized (inFlightVerbs) {
-				inFlightVerbs.put(workReqId, recvVerb);
+			endpoint.postRecv(recvWRs).execute().free();
 			}
-		}
 	}
 
 //	public static void repostOnFailure(IbvWC wc1, RdmaShuffleServerEndpoint endpoint, int workRequestId) throws

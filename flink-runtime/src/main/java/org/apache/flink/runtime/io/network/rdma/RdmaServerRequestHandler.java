@@ -143,9 +143,9 @@ public class RdmaServerRequestHandler implements Runnable {
 //						LOG.info("Server: Did not get expected wr_id {} on endpoint {}", wc.getWr_id(), clientEndpoint
 // .getEndpointStr());
 //					}
-					synchronized (inFlightVerbs){
-						inFlightVerbs.remove(wc.getWr_id()).free();
-					}
+//					synchronized (inFlightVerbs){
+//						inFlightVerbs.remove(wc.getWr_id()).free();
+//					}
 					if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 						if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 							LOG.error("Receive posting failed. reposting new receive request");
@@ -307,9 +307,10 @@ public class RdmaServerRequestHandler implements Runnable {
 								.incrementAndGet(),inFlightVerbs);
 						}
 
-				}else{
-					requestQueueOnCurrentConnection.tryEnqueueReader();
 				}
+//				else{
+////					requestQueueOnCurrentConnection.tryEnqueueReader();
+//				}
 			} catch (Exception e) {
 				LOG.error("failed to writing out the data ", e);
 			}

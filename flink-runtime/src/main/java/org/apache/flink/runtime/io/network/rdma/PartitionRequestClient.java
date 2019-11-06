@@ -313,7 +313,7 @@ class PartitionReaderClient implements Runnable {
 				}
 
 				IbvWC wc = clientEndpoint.getWcEvents().take();
-				inFlightVerbs.remove(wc.getWr_id()).free();
+//				inFlightVerbs.remove(wc.getWr_id()).free();
 //				LOG.info("took client event with wr_id {} on endpoint {}", wc.getWr_id(), clientEndpoint.getEndpointStr());
 				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
