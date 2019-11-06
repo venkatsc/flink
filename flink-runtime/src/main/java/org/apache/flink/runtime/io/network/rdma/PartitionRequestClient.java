@@ -295,7 +295,7 @@ class PartitionReaderClient implements Runnable {
 							unannouncedCredit - failed,
 							inputChannel.getInputChannelId());
 						availableCredit += unannouncedCredit;
-						LOG.info("Announced available credit: {}",availableCredit);
+						LOG.info("Announced available credit: {} on {}",availableCredit,clientEndpoint.getEndpointStr());
 						ByteBuf message = msg.write(clientEndpoint.getNettyBufferpool());
 						// TODO: lurcking bug, if credit posted before sending out the previous credit, we might hold
 						clientEndpoint.getSendBuffer().put(message.nioBuffer());
@@ -336,7 +336,7 @@ class PartitionReaderClient implements Runnable {
 							byte ID = receiveBuffer.readByte();
 							switch (ID) {
 								case NettyMessage.BufferResponse.ID:
-									NettyMessage.BufferResponse bufferOrEvent =NettyMessage.BufferResponse.readFrom(receiveBuffer);
+									NettyMessage.BufferResponse bufferOrEvent = NettyMessage.BufferResponse.readFrom(receiveBuffer);
 									availableCredit = bufferOrEvent.availableCredit;
 //									LOG.info("Receive complete: " + wc.getWr_id() + "buff address: "+ receiveBuffer.memoryAddress() + " seq:" + bufferOrEvent
 //										.sequenceNumber + " receiver id " + bufferOrEvent.receiverId + " backlog: " +

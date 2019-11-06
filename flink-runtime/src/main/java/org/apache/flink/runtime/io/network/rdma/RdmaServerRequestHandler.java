@@ -173,6 +173,8 @@ public class RdmaServerRequestHandler implements Runnable {
 								// we need to post receive for next message. for example credit
 								// TODO: We should do executor service here
 								requestQueueOnCurrentConnection.notifyReaderCreated(reader);
+								// If there is data on the connection,
+								requestQueueOnCurrentConnection.tryEnqueueReader();
 
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId
 									.incrementAndGet(), inFlightVerbs);
@@ -306,15 +308,16 @@ public class RdmaServerRequestHandler implements Runnable {
 							RdmaSendReceiveUtil.postSendReq(clientEndpoint, clientEndpoint.workRequestId
 								.incrementAndGet(),inFlightVerbs);
 						}
-
 				}
-//				else{
-////					requestQueueOnCurrentConnection.tryEnqueueReader();
-//				}
+				else{
+					// place holder for debug
+					int t=0;
+					//requestQueueOnCurrentConnection.tryEnqueueReader();
+				}
 			} catch (Exception e) {
-				LOG.error("failed to writing out the data ", e);
+				LOG.error("failed to writing out the data (if no credit, then we still continue the loop)", e);
 			}
-		}
+			}
 		}
 	}
 

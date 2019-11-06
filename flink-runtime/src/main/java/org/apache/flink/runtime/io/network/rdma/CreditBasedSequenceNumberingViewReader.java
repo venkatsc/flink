@@ -59,6 +59,7 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 
 	/** The number of available buffers for holding data on the consumer side. */
 	private AtomicInteger numCreditsAvailable;
+	private AtomicInteger totalCredit;
 	private boolean initialized = false;
 
 	private int sequenceNumber = -1;
@@ -70,6 +71,7 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 
 		this.receiverId = receiverId;
 		this.numCreditsAvailable = new AtomicInteger(initialCredit);
+		this.totalCredit= new AtomicInteger(initialCredit);
 		this.requestQueue = requestQueue;
 	}
 
@@ -100,6 +102,7 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 	@Override
 	public void addCredit(int creditDeltas) {
 		numCreditsAvailable.addAndGet(creditDeltas);
+		totalCredit.addAndGet(creditDeltas);
 	}
 
 	@Override
@@ -128,8 +131,10 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 	@Override
 	public boolean isAvailable() {
 		// BEWARE: this must be in sync with #isAvailable(BufferAndBacklog)!
-		boolean available = hasBuffersAvailable() &&
-			(numCreditsAvailable.get() > 0 );
+		boolean available = hasBuffersAvailable();
+		synchronized (this){
+			available = available && numCreditsAvailable.get()>0;
+		}
 		return available ;
 	}
 
@@ -143,10 +148,12 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 	 * @param bufferAndBacklog
 	 * 		current buffer and backlog including information about the next buffer
 	 */
-	private boolean isAvailable(BufferAndBacklog bufferAndBacklog) {
+	private synchronized boolean isAvailable(BufferAndBacklog bufferAndBacklog) {
 		// BEWARE: this must be in sync with #isAvailable()!
-		boolean available = bufferAndBacklog.isMoreAvailable() &&
-			(numCreditsAvailable.get() > 0 );
+		boolean available = bufferAndBacklog.isMoreAvailable();
+		synchronized (this){
+			available = available && numCreditsAvailable.get()>0;
+		}
 		return  available;
 	}
 
@@ -220,6 +227,7 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 			", receiverId=" + receiverId +
 			", sequenceNumber=" + sequenceNumber +
 			", numCreditsAvailable=" + numCreditsAvailable +
+			", totalCreditReceived=" + totalCredit +
 			", isRegisteredAsAvailable=" + isRegisteredAsAvailable +
 			'}';
 	}

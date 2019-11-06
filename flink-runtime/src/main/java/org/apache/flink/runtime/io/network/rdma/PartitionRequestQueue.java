@@ -107,6 +107,11 @@ class PartitionRequestQueue {
 
 	public void notifyReaderCreated(final NetworkSequenceViewReader reader) {
 		allReaders.put(reader.getReceiverId(), reader);
+		// try to enqueue the current reader. Reader creation logic changed
+		// we may get first data available notification before reader gets created
+		synchronized (reader){
+			enqueueAvailableReader(reader);
+		}
 	}
 
 	public void cancel(InputChannelID receiverId) {
@@ -140,8 +145,10 @@ class PartitionRequestQueue {
 
 		NetworkSequenceViewReader reader = allReaders.get(receiverId);
 		if (reader != null) {
+			synchronized (reader) {
 				reader.addCredit(credit);
 				enqueueAvailableReader(reader);
+			}
 		} else {
 			throw new IllegalStateException("No reader for receiverId = " + receiverId + " exists.");
 		}
@@ -216,6 +223,9 @@ class PartitionRequestQueue {
 					// duplicate enqueue for same credit.
 					reader.setRegisteredAsAvailable(false);
 					next = reader.getNextBuffer();
+					if (next !=null && next.moreAvailable()){
+						registerAvailableReader(reader);
+					}
 				}
 				if (next == null) {
 					if (!reader.isReleased()) {
@@ -234,11 +244,7 @@ class PartitionRequestQueue {
 				} else {
 					// This channel was now removed from the available reader queue.
 					// We re-add it into the queue if it is still available
-					if (next.moreAvailable()) {
-						// make sure we enqueue only if credit available
-						enqueueAvailableReader(reader);
-//						reader.setRegisteredAsAvailable(true);
-					}
+
 
 					BufferResponse msg = new BufferResponse(
 						next.buffer(),

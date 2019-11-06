@@ -231,6 +231,11 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 	}
 
 	@Override
+	public String toString(){
+	 return this.getEndpointStr();
+	}
+
+	@Override
 	public boolean isClosed() {
 		return isClosed;
 	}

@@ -140,6 +140,10 @@ public String getEndpointStr() {
 			return wcEvents;
 	}
 
+	@Override
+	public String toString(){
+		return this.getEndpointStr();
+	}
 
   public void stop() {
 		try {
