@@ -351,7 +351,7 @@ public abstract class NettyMessage {
 		}
 
 		void releaseBuffer() {
-			buffer.release();
+			((Buffer)buffer).recycleBuffer();
 			NetworkBufferPool.reclaimHeaderBuffer(headerBufPosition);
 		}
 
@@ -451,7 +451,7 @@ public abstract class NettyMessage {
 //				if (headerBuf != null) {
 //					headerBuf = null;
 //				}
-				buffer.release();
+				((Buffer)buffer).recycleBuffer();
 
 				ExceptionUtils.rethrowIOException(t);
 				return null; // silence the compiler

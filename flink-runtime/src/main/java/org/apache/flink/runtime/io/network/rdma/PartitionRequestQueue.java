@@ -76,7 +76,9 @@ class PartitionRequestQueue {
 //	}
 
 	void notifyReaderNonEmpty(final NetworkSequenceViewReader reader) {
-		enqueueAvailableReader(reader);
+		// writer thread queues if the readers are empty
+
+//		enqueueAvailableReader(reader);
 	}
 
 	/**
@@ -86,11 +88,12 @@ class PartitionRequestQueue {
 	 * <p>NOTE: Only one thread would trigger the actual enqueue after checking the reader's
 	 * availability, so there is no race condition here.
 	 */
-	private synchronized void enqueueAvailableReader(final NetworkSequenceViewReader reader) {
+	private synchronized boolean enqueueAvailableReader(final NetworkSequenceViewReader reader) {
 		if (reader.isRegisteredAsAvailable() || !reader.isAvailable()) {
-			return;
+			return false;
 		}
 		registerAvailableReader(reader);
+		return true;
 	}
 
 	/**
@@ -145,10 +148,9 @@ class PartitionRequestQueue {
 
 		NetworkSequenceViewReader reader = allReaders.get(receiverId);
 		if (reader != null) {
-			synchronized (reader) {
 				reader.addCredit(credit);
-				enqueueAvailableReader(reader);
-			}
+				// let writer thread enqueue the data
+			// enqueueing here possibly creates deadlock as registered available check requires here
 		} else {
 			throw new IllegalStateException("No reader for receiverId = " + receiverId + " exists.");
 		}
@@ -217,7 +219,7 @@ class PartitionRequestQueue {
 					if (reader == null) {
 						return null;
 					}
-				synchronized (reader) {
+//				synchronized (reader) {
 					// Reader poll resets the status of registered without decrementing the credit.
 					// So, adding and enqueuing should be done as atomic. So that, there will not be
 					// duplicate enqueue for same credit.
@@ -226,7 +228,7 @@ class PartitionRequestQueue {
 					if (next !=null && next.moreAvailable()){
 						registerAvailableReader(reader);
 					}
-				}
+//				}
 				if (next == null) {
 					if (!reader.isReleased()) {
 						continue;
@@ -244,7 +246,6 @@ class PartitionRequestQueue {
 				} else {
 					// This channel was now removed from the available reader queue.
 					// We re-add it into the queue if it is still available
-
 
 					BufferResponse msg = new BufferResponse(
 						next.buffer(),

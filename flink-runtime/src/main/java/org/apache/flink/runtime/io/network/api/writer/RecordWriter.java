@@ -207,7 +207,7 @@ public class RecordWriter<T extends IOReadableWritable> {
 		try {
 			segment = targetPartition.getBufferProvider().requestBufferBlocking();
 		}catch (InterruptedException e){
-			throw new IOException("");
+			throw new IOException("Failed to get buffer");
 		}
 		try (BufferConsumer eventBufferConsumer = EventSerializer.toBufferConsumer(event,segment.getMemorySegment())) {
 			for (int targetChannel = 0; targetChannel < numberOfChannels; targetChannel++) {

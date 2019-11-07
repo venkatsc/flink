@@ -239,6 +239,7 @@ class LocalBufferPool implements BufferPool {
 		while (true) {
 			Optional<MemorySegment> segment = internalRequestMemorySegment();
 			if (segment.isPresent()) {
+//				LOG.info("Allocated memory segment {} from pool {}",segment.get().getAddress(),this.toString());
 				return segment.get();
 			}
 
@@ -283,14 +284,17 @@ class LocalBufferPool implements BufferPool {
 	public void recycle(MemorySegment segment) {
 		BufferListener listener;
 		NotificationResult notificationResult = NotificationResult.BUFFER_NOT_USED;
+//		LOG.info("Recycling memory segment {} on pool {}",segment.getAddress(), this.toString());
 		while (!notificationResult.isBufferUsed()) {
 			synchronized (availableMemorySegments) {
 				if (isDestroyed || numberOfRequestedMemorySegments > currentPoolSize) {
+//					LOG.info("returned memory segment {} to network pool on pool {}",segment.getAddress(), this.toString());
 					returnMemorySegment(segment);
 					return;
 				} else {
 					listener = registeredListeners.poll();
 					if (listener == null) {
+//						LOG.info("returned memory segment {} to local pool {}",segment.getAddress(), this.toString());
 						availableMemorySegments.add(segment);
 						availableMemorySegments.notifyAll();
 						return;

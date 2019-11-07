@@ -121,6 +121,7 @@ public class BufferBuilder {
 
 	public int getMaxCapacity() {
 		return memorySegment.size() - RdmaConnectionManager.DATA_MSG_HEADER_SIZE;
+//		return memorySegment.size() - RdmaConnectionManager.DATA_MSG_HEADER_SIZE;
 	}
 
 	/**

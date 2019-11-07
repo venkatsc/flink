@@ -130,7 +130,7 @@ public class RdmaServerRequestHandler implements Runnable {
 			try {
 //				LOG.info("Server accepted connection src " + clientEndpoint.getSrcAddr() + " dst: " + clientEndpoint
 //					.getDstAddr());
-				new Thread(new RDMAWriter(requestQueueOnCurrentConnection, clientEndpoint, inFlight,inFlightVerbs)).start();
+				new Thread(new RDMAWriter(requestQueueOnCurrentConnection, clientEndpoint, inFlight,inFlightVerbs),"RdmaWriter").start();
 				boolean clientClose = false;
 				NetworkSequenceViewReader reader = null;
 				while (!clientClose) {
@@ -312,6 +312,7 @@ public class RdmaServerRequestHandler implements Runnable {
 				else{
 					// place holder for debug
 					int t=0;
+					requestQueueOnCurrentConnection.tryEnqueueReader();
 					//requestQueueOnCurrentConnection.tryEnqueueReader();
 				}
 			} catch (Exception e) {

@@ -112,16 +112,16 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 
 	@Override
 	public void setRegisteredAsAvailable(boolean isRegisteredAvailable) {
-		synchronized (this) {
+//		synchronized (this) {
 			this.isRegisteredAsAvailable = isRegisteredAvailable;
-		}
+//		}
 	}
 
 	@Override
 	public boolean isRegisteredAsAvailable() {
-		synchronized (this) {
+//		synchronized (this) {
 			return isRegisteredAsAvailable;
-		}
+//		}
 	}
 
 	/**
