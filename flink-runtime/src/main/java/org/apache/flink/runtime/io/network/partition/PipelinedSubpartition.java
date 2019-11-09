@@ -23,8 +23,6 @@ import org.apache.flink.runtime.io.network.api.EndOfPartitionEvent;
 import org.apache.flink.runtime.io.network.api.serialization.EventSerializer;
 import org.apache.flink.runtime.io.network.buffer.Buffer;
 import org.apache.flink.runtime.io.network.buffer.BufferConsumer;
-import org.apache.flink.runtime.io.network.buffer.BufferProvider;
-import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -85,7 +83,7 @@ class PipelinedSubpartition extends ResultSubpartition {
 	@Override
 	public void finish(MemorySegment segment) throws IOException {
 		add(EventSerializer.toBufferConsumer(EndOfPartitionEvent.INSTANCE,segment), true);
-		LOG.debug("Finished partition on task {}: partition: {}.", parent.getOwningTaskName(), this);
+		LOG.debug("{}: Finished {}.", parent.getOwningTaskName(), this);
 	}
 
 	private boolean add(BufferConsumer bufferConsumer, boolean finish) {
@@ -191,7 +189,7 @@ class PipelinedSubpartition extends ResultSubpartition {
 			// will be 2 or more.
 			return new BufferAndBacklog(
 				buffer,
-				isAvailable(),
+				isAvailableUnsafe(),
 				getBuffersInBacklog(),
 				nextBufferIsEventUnsafe());
 		}
@@ -227,7 +225,7 @@ class PipelinedSubpartition extends ResultSubpartition {
 		synchronized (buffers) {
 			checkState(!isReleased);
 			checkState(readView == null,
-					"Subpartition %s of is being (or already has been) consumed, " +
+				"Subpartition %s of is being (or already has been) consumed, " +
 					"but pipelined subpartitions can only be consumed once.", index, parent.getPartitionId());
 
 			LOG.debug("{}: Creating read view for subpartition {} of partition {}.",
@@ -320,11 +318,11 @@ class PipelinedSubpartition extends ResultSubpartition {
 		// NOTE: isFinished() is not guaranteed to provide the most up-to-date state here
 		// worst-case: a single finished buffer sits around until the next flush() call
 		// (but we do not offer stronger guarantees anyway)
-		if (buffers.size() == 1 ) {
+		if (buffers.size() == 1 && buffers.peekLast().isFinished()) {
 			return 1;
 		}
 
-		// we don't need buffers to be finished
-		return Math.max(0, buffers.size());
+		// We assume that only last buffer is not finished.
+		return Math.max(0, buffers.size() - 1);
 	}
 }
