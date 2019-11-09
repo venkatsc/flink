@@ -202,7 +202,7 @@ public class RdmaServerRequestHandler implements Runnable {
 							} else if (msgClazz == NettyMessage.AddCredit.class) {
 								NettyMessage.AddCredit request = (NettyMessage.AddCredit) clientRequest;
 //								NetworkSequenceViewReader reader = readers.get(request.receiverId);
-								LOG.info("Add credit: credit {} on the {}",request.credit,clientEndpoint.getEndpointStr());
+//								LOG.info("Add credit: credit {} on the {}",request.credit,clientEndpoint.getEndpointStr());
 								requestQueueOnCurrentConnection.addCredit(request.receiverId,request.credit);
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId
 									.incrementAndGet(), inFlightVerbs); // post next

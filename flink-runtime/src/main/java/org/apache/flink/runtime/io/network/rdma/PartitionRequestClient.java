@@ -295,7 +295,7 @@ class PartitionReaderClient implements Runnable {
 							unannouncedCredit - failed,
 							inputChannel.getInputChannelId());
 						availableCredit += unannouncedCredit;
-						LOG.info("Announced available credit: {} on {}",availableCredit,clientEndpoint.getEndpointStr());
+//						LOG.info("Announced available credit: {} on {}",availableCredit,clientEndpoint.getEndpointStr());
 						ByteBuf message = msg.write(clientEndpoint.getNettyBufferpool());
 						// TODO: lurcking bug, if credit posted before sending out the previous credit, we might hold
 						clientEndpoint.getSendBuffer().put(message.nioBuffer());
