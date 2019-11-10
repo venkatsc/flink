@@ -91,7 +91,7 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 			throw new IOException("client failed to start",e);
 		}
 
-		LOG.info("SimpleClient::client channel set up ");
+		LOG.info("SimpleClient::client channel set up completed for {}",endpoint.getEndpointStr());
 		// start and post a receive
 		return endpoint;
 	}
