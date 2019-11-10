@@ -136,8 +136,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 		PartitionReaderClient readerClient = new PartitionReaderClient(partitionId, subpartitionIndex, inputChannel,
 			delayMs, clientEndpoint, clientHandler);
 		LOG.info(readerClient.toString());
-
-		Thread clientReaderThread = new Thread(readerClient);
+		Thread clientReaderThread = new Thread(readerClient,"partition-client");
 		clientReaderThread.start();
 		// TODO (venkat): this should be done in seperate thread (see SingleInputGate.java:494)
 		// input channels are iterated over, i.e; future operator has to wait for one by one completion
@@ -220,7 +219,6 @@ class PartitionReaderClient implements Runnable {
 	private final Map<Long,ByteBuf> receivedBuffers = new HashMap<>();
 //	ArrayDeque<ByteBuf> receivedBuffers = new ArrayDeque<>();
 	Map<Long,ByteBuf> inFlight = new HashMap<Long,ByteBuf>();
-	Map<Long,StatefulVerbCall<? extends StatefulVerbCall<?>>> inFlightVerbs = new ConcurrentHashMap<>();
 //	private long workRequestId;
 
 	public PartitionReaderClient(final ResultPartitionID partitionId,
@@ -247,7 +245,7 @@ class PartitionReaderClient implements Runnable {
 				receiveBuffer = (NetworkBuffer) inputChannel.requestBuffer();
 				if (receiveBuffer != null) {
 					long id = clientEndpoint.workRequestId.incrementAndGet();
-					RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint,id, receiveBuffer,inFlightVerbs);
+					RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint,id, receiveBuffer);
 					receivedBuffers.put(id,receiveBuffer);
 				} else {
 					LOG.error("Buffer from the channel is null");
@@ -275,7 +273,7 @@ class PartitionReaderClient implements Runnable {
 		try {
 			buf = msg.write(clientEndpoint.getNettyBufferpool());
 			clientEndpoint.getSendBuffer().put(buf.nioBuffer());
-			RdmaSendReceiveUtil.postSendReq(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet(),inFlightVerbs);
+			RdmaSendReceiveUtil.postSendReq(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet());
 		} catch (Exception ioe) {
 			LOG.error("Failed to serialize partition request {}",ioe);
 			return;
@@ -301,7 +299,7 @@ class PartitionReaderClient implements Runnable {
 						clientEndpoint.getSendBuffer().put(message.nioBuffer());
 						long workID = clientEndpoint.workRequestId.incrementAndGet();
 						inFlight.put(workID,message);
-						RdmaSendReceiveUtil.postSendReq(clientEndpoint, workID,inFlightVerbs);
+						RdmaSendReceiveUtil.postSendReq(clientEndpoint, workID);
 					} else {
 //						LOG.info("No credit available on channel {}",availableCredit,inputChannel);
 							// wait for the credit to be available, otherwise connection stucks in blocking

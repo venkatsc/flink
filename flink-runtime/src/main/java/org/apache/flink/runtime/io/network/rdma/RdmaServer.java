@@ -53,7 +53,6 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaServer.class);
 	private RdmaActiveEndpointGroup<RdmaShuffleServerEndpoint> endpointGroup;
 	private final NettyConfig rdmaConfig;
-//	private int workRequestId = 1;
 	private RdmaServerEndpoint<RdmaShuffleServerEndpoint> serverEndpoint;
 	private InetSocketAddress address;
 	private boolean stopped = false;
@@ -79,13 +78,14 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 	 * @throws IOException
 	 */
 	public RdmaShuffleServerEndpoint createEndpoint(RdmaCmId idPriv, boolean serverSide) throws IOException {
-		return new RdmaShuffleServerEndpoint(endpointGroup, idPriv, serverSide, rdmaConfig.getMemorySegmentSize()+100);
+		return new RdmaShuffleServerEndpoint(endpointGroup, idPriv, serverSide, rdmaConfig.getMemorySegmentSize() +
+			100);
 	}
 
-	public RdmaServer(NettyConfig rdmaConfig, NettyBufferPool bufferPool,NetworkBufferPool networkBufferPool) {
+	public RdmaServer(NettyConfig rdmaConfig, NettyBufferPool bufferPool, NetworkBufferPool networkBufferPool) {
 		this.rdmaConfig = rdmaConfig;
 		this.bufferPool = bufferPool;
-		this.networkBufferPool=networkBufferPool;
+		this.networkBufferPool = networkBufferPool;
 	}
 
 	public void setPartitionProvider(ResultPartitionProvider partitionProvider) {
@@ -96,26 +96,28 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 		this.taskEventDispatcher = taskEventDispatcher;
 	}
 
-	private void registerMemoryRegions(RdmaServerEndpoint<RdmaShuffleServerEndpoint> endpoint,Map<Long,IbvMr> registerdMRs) throws IOException {
+	private void registerMemoryRegions(RdmaServerEndpoint<RdmaShuffleServerEndpoint> endpoint, Map<Long, IbvMr>
+		registerdMRs) throws IOException {
 		long start = System.nanoTime();
 		for (int i = 0; i < networkBufferPool.getTotalNumberOfMemorySegments(); i++) {
-			MemorySegment segment=networkBufferPool.requestMemorySegment();
-			IbvMr mr=endpoint.registerMemory(segment.getAddress(),segment.size()).execute().getMr();
-			registerdMRs.put(segment.getAddress(),mr);
+			MemorySegment segment = networkBufferPool.requestMemorySegment();
+			IbvMr mr = endpoint.registerMemory(segment.getAddress(), segment.size()).execute().getMr();
+			registerdMRs.put(segment.getAddress(), mr);
 			networkBufferPool.recycle(segment);
 		}
-		NetworkBufferPool.setHeaderBufferMR(endpoint.registerMemory(NetworkBufferPool.getBackingHeaderBuffer()).execute().getMr());
+		NetworkBufferPool.setHeaderBufferMR(endpoint.registerMemory(NetworkBufferPool.getBackingHeaderBuffer())
+			.execute().getMr());
 		long end = System.nanoTime();
 		LOG.info("Server: Memory resgistration time for (in seconds): " + ((end
-			- start) / (1000.0*1000*1000)));
+			- start) / (1000.0 * 1000 * 1000)));
 	}
 
-	public void start(Map<Long,IbvMr> registerdMRs) throws IOException {
+	public void start(Map<Long, IbvMr> registerdMRs) throws IOException {
 		// create a EndpointGroup. The RdmaActiveEndpointGroup contains CQ processing and delivers CQ event to the
 		// endpoint.dispatchCqEvent() method.
 		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleServerEndpoint>(1000, true, 2000, 2, 1000);
 		endpointGroup.init(this);
-		endpointGroup.getConnParam().setRnr_retry_count((byte)7);
+		endpointGroup.getConnParam().setRnr_retry_count((byte) 7);
 		// create a server endpoint
 		serverEndpoint = endpointGroup.createServerEndpoint();
 
@@ -124,22 +126,23 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 		address = new InetSocketAddress(rdmaConfig.getServerAddress(), rdmaConfig.getServerPort());
 		try {
 			serverEndpoint.bind(address, 10);
-			registerMemoryRegions(serverEndpoint,registerdMRs);
+			registerMemoryRegions(serverEndpoint, registerdMRs);
 
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 		LOG.info("SimpleServer::servers bound to address " + address.toString());
 
-		handler = new RdmaServerRequestHandler(serverEndpoint,partitionProvider,taskEventDispatcher,bufferPool,registerdMRs);
-		Thread thread = new Thread(handler);
-		thread.start();
+		handler = new RdmaServerRequestHandler(serverEndpoint, partitionProvider, taskEventDispatcher, bufferPool,
+			registerdMRs);
+		Thread server = new Thread(handler);
+		server.start();
 		LOG.info("Server handler thread start at " + address.toString());
 		// we can accept client connections untill this server is stopped
 	}
 
-	public int getPort(){
-		return  this.rdmaConfig.getServerPort();
+	public int getPort() {
+		return this.rdmaConfig.getServerPort();
 	}
 
 	public void stop() {

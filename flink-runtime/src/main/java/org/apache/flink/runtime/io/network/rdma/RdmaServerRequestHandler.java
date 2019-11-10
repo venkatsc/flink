@@ -54,13 +54,22 @@ public class RdmaServerRequestHandler implements Runnable {
 		while (!stopped) {
 			try {
 				RdmaShuffleServerEndpoint clientEndpoint = serverEndpoint.accept();
+				LOG.info("Accepted connection {}", clientEndpoint.getEndpointStr());
 				clientEndpoint.setRegisteredMRs(registerdMRs);
 				// TODO (venkat): Handle accepted connection, not using thread pool as it is only proto-type with 4
 				// servers
 				// Should be changed to configurable ThreadPool to work with more nodes.
-				HandleClientConnection connectionHandler = new HandleClientConnection(clientEndpoint);
-				Thread t = new Thread(connectionHandler);
-				t.start();
+				PartitionRequestQueue queue = new PartitionRequestQueue();
+				ConcurrentHashMap<Long, NettyMessage.BufferResponse> inFlightRequests = new ConcurrentHashMap<>();
+				// event queue handler
+				HandleClientConnection connectionHandler = new HandleClientConnection(clientEndpoint, queue,
+					inFlightRequests);
+				Thread wcEventLoop = new Thread(connectionHandler,"work-completion-loop");
+				wcEventLoop.start();
+				// data writeout handler
+				RDMAWriter writer = new RDMAWriter(queue, clientEndpoint, inFlightRequests);
+				Thread writerThread = new Thread(writer, "rdma-writer");
+				writerThread.start();
 			} catch (Exception ie) {
 				Log.error("Failed to handle request", ie);
 			}
@@ -115,22 +124,23 @@ public class RdmaServerRequestHandler implements Runnable {
 		Map<Long, StatefulVerbCall<? extends StatefulVerbCall<?>>> inFlightVerbs = new ConcurrentHashMap<>();
 		private final PartitionRequestQueue requestQueueOnCurrentConnection;
 
+		private final ConcurrentHashMap<Long, NettyMessage.BufferResponse> inFlightRequests;
 
-		HandleClientConnection(RdmaShuffleServerEndpoint clientEndpoint) throws IOException {
+		HandleClientConnection(RdmaShuffleServerEndpoint clientEndpoint,
+							   PartitionRequestQueue requestQueueOnCurrentConnection, ConcurrentHashMap<Long,
+			NettyMessage.BufferResponse> inFlightRequests) throws IOException {
 			this.clientEndpoint = clientEndpoint;
-			RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, 0, inFlightVerbs);
-			this.requestQueueOnCurrentConnection = new PartitionRequestQueue();
+			RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, 0);
+			this.requestQueueOnCurrentConnection = requestQueueOnCurrentConnection;
+			this.inFlightRequests = inFlightRequests;
+//			this.executorService = executorService;
 		}
 
-		private final ConcurrentHashMap<Long, NettyMessage.BufferResponse> inFlight = new ConcurrentHashMap<>();
 		long lastEventID = -1;
 
 		@Override
 		public void run() {
 			try {
-//				LOG.info("Server accepted connection src " + clientEndpoint.getSrcAddr() + " dst: " + clientEndpoint
-//					.getDstAddr());
-				new Thread(new RDMAWriter(requestQueueOnCurrentConnection, clientEndpoint, inFlight,inFlightVerbs),"RdmaWriter").start();
 				boolean clientClose = false;
 				NetworkSequenceViewReader reader = null;
 				while (!clientClose) {
@@ -162,7 +172,7 @@ public class RdmaServerRequestHandler implements Runnable {
 								NettyMessage.PartitionRequest partitionRequest = (NettyMessage.PartitionRequest)
 									clientRequest;
 								reader = new CreditBasedSequenceNumberingViewReader(partitionRequest
-									.receiverId, partitionRequest.credit,requestQueueOnCurrentConnection);
+									.receiverId, partitionRequest.credit, requestQueueOnCurrentConnection);
 								LOG.info("received partition request: " + partitionRequest.receiverId + " with " +
 									"initial credit: " + partitionRequest.credit + "at endpoint: " +
 									getEndpointStr(clientEndpoint));
@@ -177,13 +187,13 @@ public class RdmaServerRequestHandler implements Runnable {
 								requestQueueOnCurrentConnection.tryEnqueueReader();
 
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId
-									.incrementAndGet(), inFlightVerbs);
+									.incrementAndGet());
 								// TODO(venkat): do something better here, we should not poll reader
 							} else if (msgClazz == NettyMessage.TaskEventRequest.class) {
 								NettyMessage.TaskEventRequest request = (NettyMessage.TaskEventRequest) clientRequest;
 								LOG.error("Unhandled request type TaskEventRequest");
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId
-									.incrementAndGet(), inFlightVerbs); // post next
+									.incrementAndGet()); // post next
 								// receive
 								// TODO (venkat): Handle it
 								if (!taskEventDispatcher.publish(request.partitionId, request.event)) {
@@ -195,23 +205,24 @@ public class RdmaServerRequestHandler implements Runnable {
 									clientRequest;
 								LOG.error("Unhandled request type CancelPartitionRequest");
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId
-									.incrementAndGet(), inFlightVerbs); // post next
+									.incrementAndGet()); // post next
 								// receive
 								// TODO (venkat): Handle it
 //							outboundQueue.cancel(request.receiverId);
 							} else if (msgClazz == NettyMessage.AddCredit.class) {
 								NettyMessage.AddCredit request = (NettyMessage.AddCredit) clientRequest;
 //								NetworkSequenceViewReader reader = readers.get(request.receiverId);
-//								LOG.info("Add credit: credit {} on the {}",request.credit,clientEndpoint.getEndpointStr());
-								requestQueueOnCurrentConnection.addCredit(request.receiverId,request.credit);
+//								LOG.info("Add credit: credit {} on the {}",request.credit,clientEndpoint
+// .getEndpointStr());
+								requestQueueOnCurrentConnection.addCredit(request.receiverId, request.credit);
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId
-									.incrementAndGet(), inFlightVerbs); // post next
+									.incrementAndGet()); // post next
 								// receive
 								// TODO (venkat): Handle it
 								// outboundQueue.addCredit(request.receiverId, request.credit);
 							} else {
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId
-									.incrementAndGet(), inFlightVerbs); // post next
+									.incrementAndGet()); // post next
 								// receive
 								LOG.warn("Received unexpected client request: {}", clientRequest);
 							}
@@ -224,10 +235,10 @@ public class RdmaServerRequestHandler implements Runnable {
 //							RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
 						}
 						NettyMessage.BufferResponse response;
-						synchronized (inFlight) {
+						synchronized (inFlightRequests) {
 							long wc_id = wc.getWr_id();
 //							LOG.info("send work request completed {}", wc_id);
-							response = inFlight.remove(wc_id);
+							response = inFlightRequests.remove(wc_id);
 							if (response != null) {
 //								LOG.info("releasing buffer on send completion for WR {} address {}", wc_id, response
 //									.getBuffer().memoryAddress());
@@ -258,26 +269,24 @@ public class RdmaServerRequestHandler implements Runnable {
 
 		private RdmaShuffleServerEndpoint clientEndpoint;
 		private ConcurrentHashMap<Long, NettyMessage.BufferResponse> inFlight;
-		private Map<Long, StatefulVerbCall<? extends StatefulVerbCall<?>>> inFlightVerbs;
 
 
-		public RDMAWriter( PartitionRequestQueue requestQueueOnCurrentConnection, RdmaShuffleServerEndpoint clientEndpoint,
-						  ConcurrentHashMap<Long, NettyMessage.BufferResponse> inFlight, Map<Long, StatefulVerbCall<?
-			extends StatefulVerbCall<?>>> inFlightVerbs) {
+		public RDMAWriter(PartitionRequestQueue requestQueueOnCurrentConnection, RdmaShuffleServerEndpoint
+			clientEndpoint,
+						  ConcurrentHashMap<Long, NettyMessage.BufferResponse> inFlight) {
 			this.requestQueueOnCurrentConnection = requestQueueOnCurrentConnection;
 			this.clientEndpoint = clientEndpoint;
 			this.inFlight = inFlight;
-			this.inFlightVerbs = inFlightVerbs;
 		}
 
 		@Override
 		public void run() {
 			while (!clientEndpoint.isClosed()) {
-			try {
-				if (!requestQueueOnCurrentConnection.getAvailableReaders().isEmpty()) {
+				try {
+					if (!requestQueueOnCurrentConnection.getAvailableReaders().isEmpty()) {
 						NettyMessage response = requestQueueOnCurrentConnection.getResponseMessage();
 
-						if (response==null){
+						if (response == null) {
 							continue;
 						}
 
@@ -301,23 +310,22 @@ public class RdmaServerRequestHandler implements Runnable {
 //									(NettyMessage.BufferResponse) response).getBuffer().memoryAddress());
 								inFlight.put(workRequestId, (NettyMessage.BufferResponse) response);
 								RdmaSendReceiveUtil.postSendReqForBufferResponse(clientEndpoint, workRequestId,
-									(NettyMessage.BufferResponse) response,inFlightVerbs);
+									(NettyMessage.BufferResponse) response);
 							}
 						} else {
 							clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
 							RdmaSendReceiveUtil.postSendReq(clientEndpoint, clientEndpoint.workRequestId
-								.incrementAndGet(),inFlightVerbs);
+								.incrementAndGet());
 						}
+					} else {
+						// place holder for debug
+						int t = 0;
+						requestQueueOnCurrentConnection.tryEnqueueReader();
+						//requestQueueOnCurrentConnection.tryEnqueueReader();
+					}
+				} catch (Exception e) {
+					LOG.error("failed to writing out the data (if no credit, then we still continue the loop)", e);
 				}
-				else{
-					// place holder for debug
-					int t=0;
-					requestQueueOnCurrentConnection.tryEnqueueReader();
-					//requestQueueOnCurrentConnection.tryEnqueueReader();
-				}
-			} catch (Exception e) {
-				LOG.error("failed to writing out the data (if no credit, then we still continue the loop)", e);
-			}
 			}
 		}
 	}

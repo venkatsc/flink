@@ -44,9 +44,7 @@ public class RdmaSendReceiveUtil {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaSendReceiveUtil.class);
 
 	public static void postSendReqForBufferResponse(RdmaActiveEndpoint endpoint, long workReqId, NettyMessage
-		.BufferResponse response, Map<Long, StatefulVerbCall<? extends
-		StatefulVerbCall<?>>>
-														inFlightVerbs) throws IOException {
+		.BufferResponse response) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
@@ -133,9 +131,7 @@ public class RdmaSendReceiveUtil {
 		}
 	}
 
-	public static void postSendReq(RdmaActiveEndpoint endpoint, long workReqId, Map<Long, StatefulVerbCall<? extends
-		StatefulVerbCall<?>>>
-		inFlightVerbs) throws IOException {
+	public static void postSendReq(RdmaActiveEndpoint endpoint, long workReqId) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
@@ -189,9 +185,7 @@ public class RdmaSendReceiveUtil {
 		}
 	}
 
-	public static void postReceiveReq(RdmaActiveEndpoint endpoint, long workReqId, Map<Long, StatefulVerbCall<?
-		extends StatefulVerbCall<?>>>
-		inFlightVerbs) throws IOException {
+	public static void postReceiveReq(RdmaActiveEndpoint endpoint, long workReqId) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 //			LOG.info("posting server receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest:
@@ -232,9 +226,7 @@ public class RdmaSendReceiveUtil {
 		}
 	}
 
-	public static void postReceiveReqWithChannelBuf(RdmaActiveEndpoint endpoint, long workReqId, ByteBuf buffer,
-													Map<Long, StatefulVerbCall<? extends StatefulVerbCall<?>>>
-														inFlightVerbs)
+	public static void postReceiveReqWithChannelBuf(RdmaActiveEndpoint endpoint, long workReqId, ByteBuf buffer)
 		throws IOException {
 
 		if (endpoint instanceof RdmaShuffleClientEndpoint) {
