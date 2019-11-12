@@ -266,6 +266,7 @@ class PartitionReaderClient implements Runnable {
 		// given the number of buffers configured for network low, it is set to 10 but should be configurable.
 		int availableCredit = inputChannel.getInitialCredit();
 		int failed = postBuffers(availableCredit);
+//		boolean canSendCredit= false; // server will send the flag with message
 		NettyMessage msg = new NettyMessage.PartitionRequest(
 			partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit() -
 			failed);
@@ -283,7 +284,7 @@ class PartitionReaderClient implements Runnable {
 				// TODO: send credit if credit is reached zero
 //			for (int i=0;i<takeEventsCount;i++) {
 //				long startTime = System.nanoTime();
-				if (availableCredit <= 0) {
+				if (availableCredit<=0) {
 					if (inputChannel.getUnannouncedCredit() > 0) {
 						int unannouncedCredit = inputChannel.getAndResetUnannouncedCredit();
 //						LOG.info("Adding credit: {} on channel {}", unannouncedCredit, inputChannel);
@@ -336,6 +337,7 @@ class PartitionReaderClient implements Runnable {
 								case NettyMessage.BufferResponse.ID:
 									NettyMessage.BufferResponse bufferOrEvent = NettyMessage.BufferResponse.readFrom(receiveBuffer);
 									availableCredit = bufferOrEvent.availableCredit;
+//									canSendCredit = bufferOrEvent.canRecvCredit;
 //									LOG.info("Receive complete: " + wc.getWr_id() + "buff address: "+ receiveBuffer.memoryAddress() + " seq:" + bufferOrEvent
 //										.sequenceNumber + " receiver id " + bufferOrEvent.receiverId + " backlog: " +
 //										bufferOrEvent.backlog);

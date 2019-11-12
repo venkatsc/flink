@@ -44,6 +44,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 
 /**
@@ -61,6 +62,8 @@ class PartitionRequestQueue {
 	private final ConcurrentMap<InputChannelID, NetworkSequenceViewReader> allReaders = new ConcurrentHashMap<>();
 
 	private final Set<InputChannelID> released = Sets.newHashSet();
+
+//	private AtomicBoolean canReceiveCredit = new AtomicBoolean();
 
 	private boolean fatalError;
 
@@ -323,6 +326,11 @@ class PartitionRequestQueue {
 	private void markAsReleased(InputChannelID receiverId) {
 		released.add(receiverId);
 	}
+
+//	public void canReceiveCredit( boolean canRecieveCredit) {
+//		canReceiveCredit.getAndSet(canRecieveCredit);
+////		allReaders.get(receiverId).setReceiveCredit(canRecieveCredit);
+//	}
 
 	// This listener is called after an element of the current nonEmptyReader has been
 	// flushed. If successful, the listener triggers further processing of the

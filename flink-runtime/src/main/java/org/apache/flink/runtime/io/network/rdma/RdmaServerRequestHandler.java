@@ -58,7 +58,7 @@ public class RdmaServerRequestHandler implements Runnable {
 				// event queue handler
 				HandleClientConnection connectionHandler = new HandleClientConnection(clientEndpoint, queue,
 					inFlightRequests);
-				Thread wcEventLoop = new Thread(connectionHandler,"work-completion-loop");
+				Thread wcEventLoop = new Thread(connectionHandler, "work-completion-loop");
 				wcEventLoop.start();
 				// data writeout handler
 				RDMAWriter writer = new RDMAWriter(queue, clientEndpoint, inFlightRequests);
@@ -115,7 +115,6 @@ public class RdmaServerRequestHandler implements Runnable {
 
 	private class HandleClientConnection implements Runnable {
 		RdmaShuffleServerEndpoint clientEndpoint;
-		Map<Long, StatefulVerbCall<? extends StatefulVerbCall<?>>> inFlightVerbs = new ConcurrentHashMap<>();
 		private final PartitionRequestQueue requestQueueOnCurrentConnection;
 
 		private final ConcurrentHashMap<Long, NettyMessage.BufferResponse> inFlightRequests;
@@ -208,9 +207,11 @@ public class RdmaServerRequestHandler implements Runnable {
 //								NetworkSequenceViewReader reader = readers.get(request.receiverId);
 //								LOG.info("Add credit: credit {} on the {}",request.credit,clientEndpoint
 // .getEndpointStr());
+//								requestQueueOnCurrentConnection.canReceiveCredit(false);
 								requestQueueOnCurrentConnection.addCredit(request.receiverId, request.credit);
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId
 									.incrementAndGet()); // post next
+//								requestQueueOnCurrentConnection.canReceiveCredit(true);
 								// receive
 								// TODO (venkat): Handle it
 								// outboundQueue.addCredit(request.receiverId, request.credit);
@@ -224,20 +225,19 @@ public class RdmaServerRequestHandler implements Runnable {
 						clientEndpoint.getReceiveBuffer().clear();
 					} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
 						if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-							LOG.error("Server:Send failed. reposting new send request request" + getEndpointStr
+							LOG.error("Server:Send failed for WR id {} with code {}. reposting new send request " +
+								"request {}", wc.getWr_id(), IbvWC.IbvWcStatus.valueOf(wc.getStatus()), getEndpointStr
 								(clientEndpoint));
 //							RdmaSendReceiveUtil.postSendReq(clientEndpoint, ++workRequestId);
 						}
 						NettyMessage.BufferResponse response;
-						synchronized (inFlightRequests) {
-							long wc_id = wc.getWr_id();
+						long wc_id = wc.getWr_id();
 //							LOG.info("send work request completed {}", wc_id);
-							response = inFlightRequests.remove(wc_id);
-							if (response != null) {
+						response = inFlightRequests.remove(wc_id);
+						if (response != null) {
 //								LOG.info("releasing buffer on send completion for WR {} address {}", wc_id, response
 //									.getBuffer().memoryAddress());
-								response.releaseBuffer();
-							}
+							response.releaseBuffer();
 						}
 
 						// send completed, so clear the buffer
@@ -298,14 +298,12 @@ public class RdmaServerRequestHandler implements Runnable {
 						// hold references of the response until the send completes
 						if (response instanceof NettyMessage.BufferResponse) {
 							response.write(bufferPool); // creates the header info
-							synchronized (inFlight) {
-								long workRequestId = clientEndpoint.workRequestId.incrementAndGet();
+							long workRequestId = clientEndpoint.workRequestId.incrementAndGet();
 //								LOG.info("Add buffer to inFlight: wr {} memory address: {}", workRequestId, (
 //									(NettyMessage.BufferResponse) response).getBuffer().memoryAddress());
-								inFlight.put(workRequestId, (NettyMessage.BufferResponse) response);
-								RdmaSendReceiveUtil.postSendReqForBufferResponse(clientEndpoint, workRequestId,
-									(NettyMessage.BufferResponse) response);
-							}
+							inFlight.put(workRequestId, (NettyMessage.BufferResponse) response);
+							RdmaSendReceiveUtil.postSendReqForBufferResponse(clientEndpoint, workRequestId,
+								(NettyMessage.BufferResponse) response);
 						} else {
 							clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
 							RdmaSendReceiveUtil.postSendReq(clientEndpoint, clientEndpoint.workRequestId

@@ -30,6 +30,7 @@ import org.apache.flink.runtime.io.network.partition.consumer.InputChannelID;
 import org.apache.flink.runtime.io.network.partition.consumer.LocalInputChannel;
 
 import java.io.IOException;
+// import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -48,6 +49,7 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 
 	private volatile ResultSubpartitionView subpartitionView;
 
+	// private AtomicBoolean canReceiveCredit = new AtomicBoolean();
 	/**
 	 * The status indicating whether this reader is already enqueued in the pipeline for transferring
 	 * data or not.

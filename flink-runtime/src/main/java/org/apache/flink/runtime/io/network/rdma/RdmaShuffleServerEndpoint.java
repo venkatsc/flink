@@ -95,8 +95,11 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 //				throw new RuntimeException("*******server got "+ IbvWC.IbvWcOpcode.valueOf(newOpCode) +" event twice in a row. last id = "+old.getWr_id()+", current id "+old.getWr_id()+"***********");
 //			}
 //			lastEvent.set(wc.clone());
-			wcEvents.add(wc.clone());
-	}
+		try {
+			wcEvents.put(wc.clone());
+		} catch (InterruptedException e) {
+			throw new IOException(e);
+		}	}
 
 	public void init() throws IOException {
 		super.init();

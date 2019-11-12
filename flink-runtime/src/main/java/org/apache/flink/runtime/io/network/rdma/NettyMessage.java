@@ -466,7 +466,7 @@ public abstract class NettyMessage {
 			int sequenceNumber = buffer.readInt();
 			int backlog = buffer.readInt();
 			boolean isBuffer = buffer.readBoolean();
-//			boolean moreAvailable = buffer.readBoolean();
+//			boolean canSendCredit = buffer.readBoolean();
 			int size = buffer.readInt();
 
 //			Buffer retainedSlice = ((NetworkBuffer) buffer).readOnlySlice(((NetworkBuffer) buffer).getReaderIndex(),
