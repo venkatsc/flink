@@ -277,43 +277,37 @@ public class RdmaServerRequestHandler implements Runnable {
 		public void run() {
 			while (!clientEndpoint.isClosed()) {
 				try {
-					if (!requestQueueOnCurrentConnection.getAvailableReaders().isEmpty()) {
-						NettyMessage response = requestQueueOnCurrentConnection.getResponseMessage();
+					NetworkSequenceViewReader reader = requestQueueOnCurrentConnection.getAvailableReaders().take();
+					NettyMessage response = requestQueueOnCurrentConnection.getResponseMessage(reader);
 
-						if (response == null) {
-							continue;
-						}
+					if (response == null) {
+						continue;
+					}
 
-						if (response instanceof NettyMessage.BufferResponse) {
-							NettyMessage.BufferResponse tmpResp = (NettyMessage.BufferResponse)
-								response;
-						} else {
-							LOG.info("skip: sending error message/close request");
-						}
+					if (response instanceof NettyMessage.BufferResponse) {
+						NettyMessage.BufferResponse tmpResp = (NettyMessage.BufferResponse)
+							response;
+					} else {
+						LOG.info("skip: sending error message/close request");
+					}
 //								clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
 //								clientEndpoint.getReceiveBuffer().clear();
 //								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId); // post next
-						// receive
+					// receive
 
-						// hold references of the response until the send completes
-						if (response instanceof NettyMessage.BufferResponse) {
-							response.write(bufferPool); // creates the header info
-							long workRequestId = clientEndpoint.workRequestId.incrementAndGet();
+					// hold references of the response until the send completes
+					if (response instanceof NettyMessage.BufferResponse) {
+						response.write(bufferPool); // creates the header info
+						long workRequestId = clientEndpoint.workRequestId.incrementAndGet();
 //								LOG.info("Add buffer to inFlight: wr {} memory address: {}", workRequestId, (
 //									(NettyMessage.BufferResponse) response).getBuffer().memoryAddress());
-							inFlight.put(workRequestId, (NettyMessage.BufferResponse) response);
-							RdmaSendReceiveUtil.postSendReqForBufferResponse(clientEndpoint, workRequestId,
-								(NettyMessage.BufferResponse) response);
-						} else {
-							clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
-							RdmaSendReceiveUtil.postSendReq(clientEndpoint, clientEndpoint.workRequestId
-								.incrementAndGet());
-						}
+						inFlight.put(workRequestId, (NettyMessage.BufferResponse) response);
+						RdmaSendReceiveUtil.postSendReqForBufferResponse(clientEndpoint, workRequestId,
+							(NettyMessage.BufferResponse) response);
 					} else {
-						// place holder for debug
-						int t = 0;
-						requestQueueOnCurrentConnection.tryEnqueueReader();
-						//requestQueueOnCurrentConnection.tryEnqueueReader();
+						clientEndpoint.getSendBuffer().put(response.write(bufferPool).nioBuffer());
+						RdmaSendReceiveUtil.postSendReq(clientEndpoint, clientEndpoint.workRequestId
+							.incrementAndGet());
 					}
 				} catch (Exception e) {
 					LOG.error("failed to writing out the data (if no credit, then we still continue the loop)", e);

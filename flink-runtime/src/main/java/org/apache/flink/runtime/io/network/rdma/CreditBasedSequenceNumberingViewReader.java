@@ -31,6 +31,7 @@ import org.apache.flink.runtime.io.network.partition.consumer.LocalInputChannel;
 
 import java.io.IOException;
 // import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -57,7 +58,7 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 	 * <p>It is mainly used to avoid repeated registrations but should be accessed by a single
 	 * thread only since there is no synchronisation.
 	 */
-	private boolean isRegisteredAsAvailable = false;
+	private AtomicBoolean isRegisteredAsAvailable = new AtomicBoolean(false);
 
 	/** The number of available buffers for holding data on the consumer side. */
 	private AtomicInteger numCreditsAvailable;
@@ -115,14 +116,14 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 	@Override
 	public void setRegisteredAsAvailable(boolean isRegisteredAvailable) {
 //		synchronized (this) {
-			this.isRegisteredAsAvailable = isRegisteredAvailable;
+			this.isRegisteredAsAvailable.getAndSet(isRegisteredAvailable);
 //		}
 	}
 
 	@Override
 	public boolean isRegisteredAsAvailable() {
 //		synchronized (this) {
-			return isRegisteredAsAvailable;
+			return isRegisteredAsAvailable.get();
 //		}
 	}
 
@@ -134,9 +135,7 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 	public boolean isAvailable() {
 		// BEWARE: this must be in sync with #isAvailable(BufferAndBacklog)!
 		boolean available = hasBuffersAvailable();
-		synchronized (this){
-			available = available && numCreditsAvailable.get()>0;
-		}
+		available = available && numCreditsAvailable.get()>0;
 		return available ;
 	}
 
@@ -150,12 +149,10 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 	 * @param bufferAndBacklog
 	 * 		current buffer and backlog including information about the next buffer
 	 */
-	private synchronized boolean isAvailable(BufferAndBacklog bufferAndBacklog) {
+	private boolean isAvailable(BufferAndBacklog bufferAndBacklog) {
 		// BEWARE: this must be in sync with #isAvailable()!
 		boolean available = bufferAndBacklog.isMoreAvailable();
-		synchronized (this){
-			available = available && numCreditsAvailable.get()>0;
-		}
+		available = available && numCreditsAvailable.get()>0;
 		return  available;
 	}
 
@@ -181,16 +178,17 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 
 	@Override
 	public BufferAndAvailability getNextBuffer() throws IOException, InterruptedException {
+		if (numCreditsAvailable.decrementAndGet() < 0) {
+			numCreditsAvailable.addAndGet(1);
+			return null;
+		}
 		BufferAndBacklog next = subpartitionView.getNextBuffer();
 		if (next != null) {
-			if (numCreditsAvailable.decrementAndGet() < 0) {
-				throw new IllegalStateException("no credit available current. current seq: "+sequenceNumber);
-			}
 			sequenceNumber++;
-
 			return new BufferAndAvailability(
 				next.buffer(), isAvailable(next), next.buffersInBacklog());
 		} else {
+			numCreditsAvailable.addAndGet(1);
 			return null;
 		}
 	}

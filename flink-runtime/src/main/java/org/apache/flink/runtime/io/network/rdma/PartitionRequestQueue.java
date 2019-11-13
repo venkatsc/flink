@@ -41,9 +41,11 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Set;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 
@@ -56,7 +58,7 @@ class PartitionRequestQueue {
 	private static final Logger LOG = LoggerFactory.getLogger(PartitionRequestQueue.class);
 
 	/** The readers which are already enqueued available for transferring data. */
-	private final ConcurrentLinkedDeque<NetworkSequenceViewReader> availableReaders = new ConcurrentLinkedDeque<>();
+	private final BlockingQueue<NetworkSequenceViewReader> availableReaders = new LinkedBlockingQueue<>();
 
 	/** All the readers created for the consumers' partition requests. */
 	private final ConcurrentMap<InputChannelID, NetworkSequenceViewReader> allReaders = new ConcurrentHashMap<>();
@@ -80,8 +82,7 @@ class PartitionRequestQueue {
 
 	void notifyReaderNonEmpty(final NetworkSequenceViewReader reader) {
 		// writer thread queues if the readers are empty
-
-//		enqueueAvailableReader(reader);
+		enqueueAvailableReader(reader);
 	}
 
 	/**
@@ -91,12 +92,12 @@ class PartitionRequestQueue {
 	 * <p>NOTE: Only one thread would trigger the actual enqueue after checking the reader's
 	 * availability, so there is no race condition here.
 	 */
-	private synchronized boolean enqueueAvailableReader(final NetworkSequenceViewReader reader) {
-		if (reader.isRegisteredAsAvailable() || !reader.isAvailable()) {
-			return false;
-		}
-		registerAvailableReader(reader);
-		return true;
+	private boolean enqueueAvailableReader(final NetworkSequenceViewReader reader) {
+			if (!reader.isAvailable()) {
+				return false;
+			}
+			registerAvailableReader(reader);
+			return true;
 	}
 
 	/**
@@ -107,7 +108,7 @@ class PartitionRequestQueue {
 	 * @return readers which are enqueued available for transferring data
 	 */
 	@VisibleForTesting
-	ConcurrentLinkedDeque<NetworkSequenceViewReader> getAvailableReaders() {
+	BlockingQueue<NetworkSequenceViewReader> getAvailableReaders() {
 		return availableReaders;
 	}
 
@@ -115,9 +116,7 @@ class PartitionRequestQueue {
 		allReaders.put(reader.getReceiverId(), reader);
 		// try to enqueue the current reader. Reader creation logic changed
 		// we may get first data available notification before reader gets created
-		synchronized (reader){
-			enqueueAvailableReader(reader);
-		}
+		enqueueAvailableReader(reader);
 	}
 
 	public void cancel(InputChannelID receiverId) {
@@ -151,7 +150,8 @@ class PartitionRequestQueue {
 
 		NetworkSequenceViewReader reader = allReaders.get(receiverId);
 		if (reader != null) {
-				reader.addCredit(credit);
+			reader.addCredit(credit);
+			enqueueAvailableReader(reader);
 				// let writer thread enqueue the data
 			// enqueueing here possibly creates deadlock as registered available check requires here
 		} else {
@@ -202,7 +202,7 @@ class PartitionRequestQueue {
 //		writeAndFlushNextMessageIfPossible(ctx.channel());
 //	}
 //
-	public NettyMessage getResponseMessage() throws IOException {
+	public NettyMessage getResponseMessage(NetworkSequenceViewReader reader) throws IOException {
 //		if (fatalError || !channel.isWritable()) {
 //			return;
 //		}
@@ -215,18 +215,17 @@ class PartitionRequestQueue {
 		try {
 			while (true) {
 
-					NetworkSequenceViewReader reader = pollAvailableReader();
 
 					// No queue with available data. We allow this here, because
 					// of the write callbacks that are executed after each write.
-					if (reader == null) {
-						return null;
-					}
+//					if (reader == null) {
+//						return null;
+//					}
 //				synchronized (reader) {
 					// Reader poll resets the status of registered without decrementing the credit.
 					// So, adding and enqueuing should be done as atomic. So that, there will not be
 					// duplicate enqueue for same credit.
-					reader.setRegisteredAsAvailable(false);
+//					reader.setRegisteredAsAvailable(false);
 					next = reader.getNextBuffer();
 					if (next !=null && next.moreAvailable()){
 						registerAvailableReader(reader);
@@ -276,13 +275,13 @@ class PartitionRequestQueue {
 		// otherwie, writer may write out data on add(reader) and reader as unavailable.
 		// Later, credit thread will set this reader as availble.
 		// Leaving it forever in available state, but the available readers will be empty.
-		reader.setRegisteredAsAvailable(true);
+//		reader.setRegisteredAsAvailable(true);
 		availableReaders.add(reader);
 	}
 
 	@Nullable
-	private NetworkSequenceViewReader pollAvailableReader() {
-		NetworkSequenceViewReader reader = availableReaders.poll();
+	private NetworkSequenceViewReader pollAvailableReader() throws InterruptedException {
+		NetworkSequenceViewReader reader = availableReaders.take();
 		return reader;
 	}
 
