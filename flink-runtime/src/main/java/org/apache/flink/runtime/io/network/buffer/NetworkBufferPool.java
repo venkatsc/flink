@@ -149,7 +149,7 @@ public class NetworkBufferPool implements BufferPoolFactory {
 
 
 	private void allocateHeaderBuffer(int numberOfSegmentsToAllocate) {
-		int sizeOfHeaderBufferPool= 2*numberOfSegmentsToAllocate;
+		int sizeOfHeaderBufferPool= 4*numberOfSegmentsToAllocate;
 		backingHeaderBuffer = ByteBuffer.allocateDirect(sizeOfHeaderBufferPool*RdmaConnectionManager.DATA_MSG_HEADER_SIZE);
 		for(int i=0; i< sizeOfHeaderBufferPool;i++) {
 			headerBuffers.add(i);

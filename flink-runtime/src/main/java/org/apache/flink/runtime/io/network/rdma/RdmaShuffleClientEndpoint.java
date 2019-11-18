@@ -29,11 +29,9 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
-
-import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
-import org.apache.flink.shaded.netty4.io.netty.buffer.Unpooled;
 
 import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
 
@@ -54,11 +52,10 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 
 	private Map<Long,IbvMr> registeredMRs;
 
-	private ArrayBlockingQueue<IbvWC> wcEvents = new ArrayBlockingQueue<>(1000);
+	private BlockingQueue<IbvWC> wcEvents = new LinkedBlockingQueue<>();
 	AtomicLong workRequestId = new AtomicLong(1);
 	private NettyBufferPool bufferPool;
 
-	private LastEvent lastEvent = new LastEvent();
 
 	public Map<Long, IbvMr> getRegisteredMRs() {
 		return registeredMRs;
@@ -69,16 +66,16 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 	}
 //	private IbvMr wholeMR;
 
-	private class LastEvent {
-		private IbvWC lastEvent;
-		public IbvWC get(){
-			return lastEvent;
-		}
-
-		public void set(IbvWC wc){
-			lastEvent=wc;
-		}
-	}
+//	private class LastEvent {
+//		private IbvWC lastEvent;
+//		public IbvWC get(){
+//			return lastEvent;
+//		}
+//
+//		public void set(IbvWC wc){
+//			lastEvent=wc;
+//		}
+//	}
 
 	public RdmaShuffleClientEndpoint(RdmaActiveEndpointGroup<? extends RdmaActiveEndpoint> group, RdmaCmId idPriv,
 									 boolean serverSide, int bufferSize, PartitionRequestClientHandler clientHandler,
@@ -101,7 +98,7 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 //			}
 //			lastEvent.set(wc.clone());
 		try {
-			wcEvents.put(wc.clone());
+			wcEvents.put(RdmaSendReceiveUtil.cloneWC(wc));
 		} catch (InterruptedException e) {
 			throw new IOException(e);
 		}
@@ -142,7 +139,7 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 		return registeredSendMemory;
 	}
 
-	public ArrayBlockingQueue<IbvWC> getWcEvents() {
+	public BlockingQueue<IbvWC> getWcEvents() {
 			return wcEvents;
 	}
 

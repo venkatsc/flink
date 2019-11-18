@@ -21,7 +21,7 @@ import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionProvider;
 
 public class RdmaServerRequestHandler implements Runnable {
-	private boolean stopped = false;
+	private volatile boolean stopped = false;
 	private RdmaServerEndpoint<RdmaShuffleServerEndpoint> serverEndpoint;
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaServerRequestHandler.class);
 

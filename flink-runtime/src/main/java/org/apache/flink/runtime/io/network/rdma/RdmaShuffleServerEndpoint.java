@@ -30,6 +30,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -77,7 +79,7 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 		}
 	}
 
-	private ArrayBlockingQueue<IbvWC> wcEvents = new ArrayBlockingQueue<>(1000);
+	private BlockingQueue<IbvWC> wcEvents = new LinkedBlockingQueue<>();
 
 	public RdmaShuffleServerEndpoint(RdmaActiveEndpointGroup<? extends RdmaActiveEndpoint> group, RdmaCmId idPriv,
 									 boolean serverSide, int bufferSize) throws IOException {
@@ -96,7 +98,7 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 //			}
 //			lastEvent.set(wc.clone());
 		try {
-			wcEvents.put(wc.clone());
+			wcEvents.put(RdmaSendReceiveUtil.cloneWC(wc));
 		} catch (InterruptedException e) {
 			throw new IOException(e);
 		}	}
@@ -139,7 +141,7 @@ public String getEndpointStr() {
 		return this.receiveBuffer;
 	}
 
-	public ArrayBlockingQueue<IbvWC> getWcEvents() {
+	public BlockingQueue<IbvWC> getWcEvents() {
 			return wcEvents;
 	}
 

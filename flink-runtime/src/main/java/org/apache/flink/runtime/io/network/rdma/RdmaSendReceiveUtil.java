@@ -22,6 +22,7 @@ import com.ibm.disni.RdmaActiveEndpoint;
 import com.ibm.disni.verbs.IbvRecvWR;
 import com.ibm.disni.verbs.IbvSendWR;
 import com.ibm.disni.verbs.IbvSge;
+import com.ibm.disni.verbs.IbvWC;
 import com.ibm.disni.verbs.SVCPostRecv;
 import com.ibm.disni.verbs.SVCPostSend;
 import com.ibm.disni.verbs.StatefulVerbCall;
@@ -289,4 +290,14 @@ public class RdmaSendReceiveUtil {
 //			}
 //		}
 //	}
+
+	// Not a best place but <anything befor but is horse shit>
+	// Clone only required values for us
+	public static IbvWC cloneWC(IbvWC wc){
+		IbvWC wc1 = new IbvWC();
+		wc1.setOpcode(wc.getOpcode());
+		wc1.setStatus(wc.getStatus());
+		wc1.setWr_id(wc.getWr_id());
+		return wc1;
+	}
 }
