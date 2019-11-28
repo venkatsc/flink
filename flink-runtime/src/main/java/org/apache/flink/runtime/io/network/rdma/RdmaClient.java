@@ -54,7 +54,7 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 		this.rdmaConfig = rdmaConfig;
 		this.clientHandler = clientHandler;
 		this.bufferPool = bufferPool;
-		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleClientEndpoint>(1000, false, 4, 4000,2, 20000);
+		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleClientEndpoint>(1000, true, 4, 4000,2, 20000);
 		endpointGroup.init(this);
 		endpointGroup.getConnParam().setRnr_retry_count((byte)7);
 		this.networkBufferPool=networkBufferPool;
