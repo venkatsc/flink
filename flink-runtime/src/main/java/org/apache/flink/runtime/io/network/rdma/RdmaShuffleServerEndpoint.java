@@ -49,7 +49,6 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 	private ByteBuffer receiveBuffer; // Todo: add buffer manager with multiple buffers
 	private IbvMr registeredReceiveMemory;
 
-	private LastEvent lastEvent = new LastEvent();
 
 	public Map<Long, IbvMr> getRegisteredMRs() {
 		return registeredMRs;
@@ -68,16 +67,22 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 	}
 	AtomicLong workRequestId = new AtomicLong(1);
 
-	private class LastEvent {
-		private IbvWC lastEvent;
-		public IbvWC get(){
-			return lastEvent;
-		}
+	RdmaServerRequestHandler.HandleClientConnection handlerClientConnection;
 
-		public void set(IbvWC wc){
-			lastEvent=wc;
-		}
+	public void setConectionHandler(RdmaServerRequestHandler.HandleClientConnection connectionHandler) {
+		handlerClientConnection = connectionHandler;
 	}
+
+//	private class LastEvent {
+//		private IbvWC lastEvent;
+//		public IbvWC get(){
+//			return lastEvent;
+//		}
+//
+//		public void set(IbvWC wc){
+//			lastEvent=wc;
+//		}
+//	}
 
 	private BlockingQueue<IbvWC> wcEvents = new LinkedBlockingQueue<>();
 
@@ -89,20 +94,8 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 
 	@Override
 	public void dispatchCqEvent(IbvWC wc) throws IOException {
-//			int newOpCode = wc.getOpcode();
-//			IbvWC old = lastEvent.get();
-//			if(old == null){
-//				lastEvent.set(wc.clone());
-//			} else if (old.getOpcode() == newOpCode){
-//				throw new RuntimeException("*******server got "+ IbvWC.IbvWcOpcode.valueOf(newOpCode) +" event twice in a row. last id = "+old.getWr_id()+", current id "+old.getWr_id()+"***********");
-//			}
-//			lastEvent.set(wc.clone());
-		try {
-			wcEvents.put(RdmaSendReceiveUtil.cloneWC(wc));
-		} catch (InterruptedException e) {
-			throw new IOException(e);
-		}	}
-
+			handlerClientConnection.handleWC(wc);
+		}
 	public void init() throws IOException {
 		super.init();
 		LOG.info("Allocating server rdma buffers");

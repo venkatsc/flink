@@ -58,8 +58,11 @@ public class RdmaServerRequestHandler implements Runnable {
 				// event queue handler
 				HandleClientConnection connectionHandler = new HandleClientConnection(clientEndpoint, queue,
 					inFlightRequests);
-				Thread wcEventLoop = new Thread(connectionHandler, "work-completion-loop");
-				wcEventLoop.start();
+
+				clientEndpoint.setConectionHandler(connectionHandler);
+
+//				Thread wcEventLoop = new Thread(connectionHandler, "work-completion-loop");
+//				wcEventLoop.start();
 				// data writeout handler
 				RDMAWriter writer = new RDMAWriter(queue, clientEndpoint, inFlightRequests);
 				Thread writerThread = new Thread(writer, "rdma-writer");
@@ -113,7 +116,7 @@ public class RdmaServerRequestHandler implements Runnable {
 //		}
 //	}
 
-	private class HandleClientConnection implements Runnable {
+	public class HandleClientConnection  {
 		RdmaShuffleServerEndpoint clientEndpoint;
 		private final PartitionRequestQueue requestQueueOnCurrentConnection;
 
@@ -131,15 +134,14 @@ public class RdmaServerRequestHandler implements Runnable {
 
 		long lastEventID = -1;
 
-		@Override
-		public void run() {
+		public void handleWC(IbvWC wc) {
 			try {
 				boolean clientClose = false;
 				NetworkSequenceViewReader reader = null;
-				while (!clientClose) {
+//				while (!clientClose) {
 					// we need to do writing in seperate thread, otherwise buffers may not be release on
 					// completion events
-					IbvWC wc = clientEndpoint.getWcEvents().take();
+//					IbvWC wc = clientEndpoint.getWcEvents().take();
 //					if (lastEventID==-1){
 //						lastEventID = wc.getWr_id();
 //					}else if (lastEventID+1 != wc.getWr_id()){
@@ -247,11 +249,11 @@ public class RdmaServerRequestHandler implements Runnable {
 						LOG.error("failed to match any condition " + wc.getOpcode());
 					}
 					// TODO: create requested handler
-				}
-				LOG.info("Server for client endpoint closed. src: " + clientEndpoint.getSrcAddr() + " dst: " +
-					clientEndpoint.getDstAddr());
-				requestQueueOnCurrentConnection.releaseAllResources();
-				clientEndpoint.close();
+//				}
+//				LOG.info("Server for client endpoint closed. src: " + clientEndpoint.getSrcAddr() + " dst: " +
+//					clientEndpoint.getDstAddr());
+//				requestQueueOnCurrentConnection.releaseAllResources();
+//				clientEndpoint.close();
 			} catch (Exception e) {
 				LOG.error("error handling client request ", e);
 			}
