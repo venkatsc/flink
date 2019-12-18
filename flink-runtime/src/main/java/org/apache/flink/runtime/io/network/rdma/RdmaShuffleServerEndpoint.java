@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaShuffleServerEndpoint.class);
-	private int bufferSize; // Todo: set default buffer size
+	private int bufferSize =100; // Todo: set default buffer size
 	private ByteBuffer sendBuffer; // Todo: add buffer manager with multiple buffers
 //	private IbvMr wholeMR;
 
