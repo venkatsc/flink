@@ -29,8 +29,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.HashMap;
 import java.util.Map;
 
+
+import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 
 import org.apache.flink.core.memory.MemorySegment;
 import org.apache.flink.runtime.io.network.buffer.NetworkBufferPool;
@@ -44,6 +47,7 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 	private int workRequestId = 1;
 	private NettyBufferPool bufferPool;
 	private Map<Long,IbvMr> registeredMrs;
+	// public is not good but
 
 	private RdmaShuffleClientEndpoint endpoint;
 	private PartitionRequestClientHandler clientHandler;
@@ -54,7 +58,7 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 		this.rdmaConfig = rdmaConfig;
 		this.clientHandler = clientHandler;
 		this.bufferPool = bufferPool;
-		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleClientEndpoint>(1000, true, 4, 4000,2, 20000);
+		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleClientEndpoint>(1000, true, 2000, 4000,2, 20000);
 		endpointGroup.init(this);
 		endpointGroup.getConnParam().setRnr_retry_count((byte)7);
 		this.networkBufferPool=networkBufferPool;

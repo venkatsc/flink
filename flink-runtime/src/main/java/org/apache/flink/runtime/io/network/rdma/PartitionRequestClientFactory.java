@@ -44,44 +44,59 @@ import java.util.concurrent.ConcurrentMap;
  * instances.
  */
 class PartitionRequestClientFactory {
-	private final HashMap<ConnectionID,RdmaShuffleClientEndpoint> clientEndpoints = new HashMap<>();
-	private final ConcurrentMap<ConnectionID, PartitionRequestClient> clients = new ConcurrentHashMap<ConnectionID, PartitionRequestClient>();
+	private final HashMap<ConnectionID, RdmaShuffleClientEndpoint> clientEndpoints = new HashMap<>();
+	private final ConcurrentMap<ConnectionID, PartitionRequestClient> clients = new ConcurrentHashMap<ConnectionID,
+		PartitionRequestClient>();
 	private static final Logger LOG = LoggerFactory.getLogger(PartitionRequestClientFactory.class);
 	private final NettyBufferPool bufferPool;
-	private PartitionRequestClientHandler clientHandler ;
-	private  NettyConfig rdmaCfg;
+	private PartitionRequestClientHandler clientHandler;
+	private NettyConfig rdmaCfg;
 	private RdmaClient rdmaClient;
 
-	PartitionRequestClientFactory(PartitionRequestClientHandler clientHandler, NettyBufferPool bufferPool, NettyConfig rdmaCfg,RdmaClient rdmaClient) {
+
+	PartitionRequestClientFactory(PartitionRequestClientHandler clientHandler, NettyBufferPool bufferPool, NettyConfig
+		rdmaCfg, RdmaClient rdmaClient) {
 		this.clientHandler = clientHandler;
 		this.bufferPool = bufferPool;
-		this.rdmaCfg= rdmaCfg;
-		this.rdmaClient=rdmaClient;
+		this.rdmaCfg = rdmaCfg;
+		this.rdmaClient = rdmaClient;
 	}
 
 	/**
 	 * Atomically establishes a TCP connection to the given remote address and
 	 * creates a {@link PartitionRequestClient} instance for this connection.
 	 */
-	PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId, InputChannel channel) throws Exception {
-//		PartitionRequestClient client = clients.get(connectionId);
-//		if (client == null) {
+	PartitionRequestClientIf createPartitionRequestClient(ConnectionID connectionId, InputChannel channel) throws
+		Exception {
+		PartitionRequestClient client = clients.get(connectionId);
+		if (client == null) {
 			// No channel yet. Create one, but watch out for a race.
 			// We create a "connecting future" and atomically add it to the map.
 			// Only the thread that really added it establishes the channel.
 			// The others need to wait on that original establisher's future.
 //			synchronized (clients) { // let us start client connections in synchronous way, so that we don't have same
-				// target connection multiple times
+			// target connection multiple times
 //				client = clients.get(connectionId);
 //				if (client==null){
-					RdmaShuffleClientEndpoint endpoint = rdmaClient.start(connectionId.getAddress());
-					clientEndpoints.put(connectionId, endpoint);
-					PartitionRequestClient client = new PartitionRequestClient(
-						endpoint, clientHandler, connectionId, this);
+			RdmaShuffleClientEndpoint endpoint = rdmaClient.start(connectionId.getAddress());
+			clientEndpoints.put(connectionId, endpoint);
+			client = new PartitionRequestClient(
+				endpoint, clientHandler, connectionId, this, channel);
 //					rdmaClient.start(connectionId.getAddress());
-					clients.putIfAbsent(connectionId, client);
-					LOG.info("creating partition client {} for connection id {}", endpoint.getEndpointStr(), connectionId.toString());
-//				}
+			clients.putIfAbsent(connectionId, client);
+			LOG.info("creating partition client {} for connection id {}", endpoint.getEndpointStr(), connectionId
+				.toString());
+
+      		PartitionReaderClient readerClient = new PartitionReaderClient(client.getInputChannels(),
+				endpoint, clientHandler);
+			LOG.info(readerClient.toString());
+			Thread clientReaderThread = new Thread(readerClient, "partition-client");
+			clientReaderThread.start();
+		}else{
+			client.addChannelToClient(channel);
+		}
+
+
 //			}
 //		}
 		// Make sure to increment the reference count before handing a client
@@ -94,16 +109,16 @@ class PartitionRequestClientFactory {
 	}
 
 	public void closeOpenChannelConnections(ConnectionID connectionId) {
-		RdmaShuffleClientEndpoint endpoint=clientEndpoints.get(connectionId);
+		RdmaShuffleClientEndpoint endpoint = clientEndpoints.get(connectionId);
 		LOG.info("Asked to close the client connection");
-		if (endpoint!=null){
+		if (endpoint != null) {
 			LOG.info("closing the client connection");
 			try {
 				endpoint.close();
 			} catch (IOException e) {
-				LOG.error("Failed to close client connection",e);
+				LOG.error("Failed to close client connection", e);
 			} catch (InterruptedException e) {
-				LOG.error("Failed to close client connection",e);
+				LOG.error("Failed to close client connection", e);
 			}
 		}
 	}

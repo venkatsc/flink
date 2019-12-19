@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
 import sun.nio.ch.DirectBuffer;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.Map;
 
@@ -159,62 +160,53 @@ public class RdmaSendReceiveUtil {
 			LinkedList<IbvSendWR> sendWRs = new LinkedList<>();
 			sendWRs.add(sendWR);
 			clientEndpoint.postSend(sendWRs).execute().free();
-		} else if (endpoint instanceof RdmaShuffleClientEndpoint) {
-			RdmaShuffleClientEndpoint clientEndpoint = (RdmaShuffleClientEndpoint) endpoint;
-//			LOG.info("posting client send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: "
-// +endpoint.getDstAddr());
-			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
-			IbvSge sendSGE = new IbvSge();
-			sendSGE.setAddr(((DirectBuffer) clientEndpoint.getSendBuffer()).address());
-			sendSGE.setLength(clientEndpoint.getSendBuffer().capacity());
-			sendSGE.setLkey(clientEndpoint.getRegisteredSendMemory().getLkey());
-			sges.add(sendSGE);
-			// Create send Work Request (WR)
-			IbvSendWR sendWR = new IbvSendWR();
-			sendWR.setWr_id(workReqId);
-			sendWR.setSg_list(sges);
-//			if (finish) {
-//				sendWR.setOpcode(IbvSendWR.IBV_WR_SEND_WITH_IMM);
-//			} else {
-			sendWR.setOpcode(IbvSendWR.IBV_WR_SEND);
-//			}
-			sendWR.setSend_flags(IbvSendWR.IBV_SEND_SIGNALED);
-
-			LinkedList<IbvSendWR> sendWRs = new LinkedList<>();
-			sendWRs.add(sendWR);
-			clientEndpoint.postSend(sendWRs).execute().free();
 		}
 	}
 
-	public static void postReceiveReq(RdmaActiveEndpoint endpoint, long workReqId) throws IOException {
+	public static void postSendReqClient(RdmaActiveEndpoint endpoint, long workReqId, ByteBuffer send) throws
+		IOException {
+		RdmaShuffleClientEndpoint clientEndpoint = (RdmaShuffleClientEndpoint) endpoint;
+//			LOG.info("posting client send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: "
+// +endpoint.getDstAddr());
+		clientEndpoint.inFlightSendBufs.put(workReqId, send);
+		LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
+		IbvSge sendSGE = new IbvSge();
+		long address = ((DirectBuffer) send).address();
+		sendSGE.setAddr(address);
+		sendSGE.setLength(send.capacity());
+		sendSGE.setLkey(clientEndpoint.registeredSendMrs.get(address).getLkey());
+		sges.add(sendSGE);
+		// Create send Work Request (WR)
+		IbvSendWR sendWR = new IbvSendWR();
+		sendWR.setWr_id(workReqId);
+		sendWR.setSg_list(sges);
+//			if (finish) {
+//				sendWR.setOpcode(IbvSendWR.IBV_WR_SEND_WITH_IMM);
+//			} else {
+		sendWR.setOpcode(IbvSendWR.IBV_WR_SEND);
+//			}
+		sendWR.setSend_flags(IbvSendWR.IBV_SEND_SIGNALED);
+
+		LinkedList<IbvSendWR> sendWRs = new LinkedList<>();
+		sendWRs.add(sendWR);
+		clientEndpoint.postSend(sendWRs).execute().free();
+	}
+
+	public static void postReceiveReq(RdmaActiveEndpoint endpoint, long workReqId, ByteBuffer recv) throws
+		IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
 //			LOG.info("posting server receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest:
 // " +endpoint.getDstAddr());
+
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
+			clientEndpoint.inFlightRecvs.put(workReqId, recv);
 			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 			IbvSge recvSGE = new IbvSge();
-			recvSGE.setAddr(((DirectBuffer) clientEndpoint.getReceiveBuffer()).address());
-			recvSGE.setLength(clientEndpoint.getReceiveBuffer().capacity());
-			recvSGE.setLkey(clientEndpoint.getRegisteredReceiveMemory().getLkey());
-			sges.add(recvSGE);
-
-			IbvRecvWR recvWR = new IbvRecvWR();
-			recvWR.setWr_id(workReqId);
-			recvWR.setSg_list(sges);
-
-			LinkedList<IbvRecvWR> recvWRs = new LinkedList<>();
-			recvWRs.add(recvWR);
-			endpoint.postRecv(recvWRs).execute().free();
-		} else if (endpoint instanceof RdmaShuffleClientEndpoint) {
-//			LOG.info("posting client receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest:
-// " +endpoint.getDstAddr());
-			RdmaShuffleClientEndpoint clientEndpoint = (RdmaShuffleClientEndpoint) endpoint;
-			LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
-			IbvSge recvSGE = new IbvSge();
-			recvSGE.setAddr(((DirectBuffer) clientEndpoint.getReceiveBuffer()).address());
-			recvSGE.setLength(clientEndpoint.getReceiveBuffer().capacity());
-			recvSGE.setLkey(clientEndpoint.getRegisteredReceiveMemory().getLkey());
+			long address = ((DirectBuffer) recv).address();
+			recvSGE.setAddr(address);
+			recvSGE.setLength(recv.capacity());
+			recvSGE.setLkey(clientEndpoint.registeredRecvMrs.get(address).getLkey());
 			sges.add(recvSGE);
 
 			IbvRecvWR recvWR = new IbvRecvWR();
@@ -248,7 +240,7 @@ public class RdmaSendReceiveUtil {
 			LinkedList<IbvRecvWR> recvWRs = new LinkedList<>();
 			recvWRs.add(recvWR);
 			endpoint.postRecv(recvWRs).execute().free();
-			}
+		}
 	}
 
 //	public static void repostOnFailure(IbvWC wc1, RdmaShuffleServerEndpoint endpoint, int workRequestId) throws
@@ -293,7 +285,7 @@ public class RdmaSendReceiveUtil {
 
 	// Not a best place but <anything befor but is horse shit>
 	// Clone only required values for us
-	public static IbvWC cloneWC(IbvWC wc){
+	public static IbvWC cloneWC(IbvWC wc) {
 		IbvWC wc1 = new IbvWC();
 		wc1.setOpcode(wc.getOpcode());
 		wc1.setStatus(wc.getStatus());

@@ -25,9 +25,12 @@ import com.ibm.disni.verbs.IbvWC;
 import com.ibm.disni.verbs.RdmaCmId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sun.nio.ch.DirectBuffer;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -35,19 +38,26 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
+
 
 public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaShuffleServerEndpoint.class);
-	private int bufferSize =100; // Todo: set default buffer size
+	private int bufferSize = 100; // Todo: set default buffer size
 	private ByteBuffer sendBuffer; // Todo: add buffer manager with multiple buffers
+	private int recvQueueSize = 2000;
+
+//	private HashMap<Long,ByteBuffer> recvBuffers = new HashMap<Long, ByteBuffer>(recvQueueSize);
+
+	public HashMap<Long,ByteBuffer> inFlightRecvs = new HashMap<Long, ByteBuffer>(recvQueueSize);
 //	private IbvMr wholeMR;
 
-	private Map<Long,IbvMr> registeredMRs;
+	private Map<Long, IbvMr> registeredMRs;
 
 	private IbvMr registeredSendMemory; // Registered memory for the above buffer
 
-	private ByteBuffer receiveBuffer; // Todo: add buffer manager with multiple buffers
-	private IbvMr registeredReceiveMemory;
+	//	private ByteBuffer receiveBuffer; // Todo: add buffer manager with multiple buffers
+	public Map<Long, IbvMr> registeredRecvMrs = new HashMap<Long, IbvMr>();
 
 
 	public Map<Long, IbvMr> getRegisteredMRs() {
@@ -62,9 +72,9 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 		return registeredSendMemory;
 	}
 
-	public IbvMr getRegisteredReceiveMemory() {
-		return registeredReceiveMemory;
-	}
+	//	public IbvMr getRegisteredReceiveMemory() {
+//		return registeredReceiveMemory;
+//	}
 	AtomicLong workRequestId = new AtomicLong(1);
 
 	RdmaServerRequestHandler.HandleClientConnection handlerClientConnection;
@@ -94,16 +104,22 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 
 	@Override
 	public void dispatchCqEvent(IbvWC wc) throws IOException {
-			handlerClientConnection.handleWC(wc);
-		}
+		handlerClientConnection.handleWC(wc);
+	}
+
 	public void init() throws IOException {
 		super.init();
 		LOG.info("Allocating server rdma buffers");
 		this.sendBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
-		this.receiveBuffer = ByteBuffer.allocateDirect(bufferSize);
-//		this.wholeMR = registerMemory().execute().getMr();
-//		LOG.info("server rkey: %d lkey: %d handle:%d\n",wholeMR.getRkey(),wholeMR.getLkey(),wholeMR.getHandle());
-		this.registeredReceiveMemory = registerMemory(receiveBuffer).execute().getMr();
+		for (int i = 0; i < recvQueueSize; i++) {
+			ByteBuffer recvBuffer = ByteBuffer.allocateDirect(bufferSize);
+			this.registeredRecvMrs.put(((DirectBuffer) recvBuffer).address(), registerMemory(recvBuffer).execute().getMr
+				());
+			long id= this.workRequestId.incrementAndGet();
+			RdmaSendReceiveUtil.postReceiveReq(this,id,recvBuffer);
+		}
+
+		this.sendBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
 		this.registeredSendMemory = registerMemory(sendBuffer).execute().getMr(); // register the send buffer
 //		this.availableFreeReceiveBuffers = ByteBuffer.allocateDirect(2); // TODO: assumption of less receive buffers
 //		this.availableFreeReceiveBuffersRegisteredMemory = registerMemory(availableFreeReceiveBuffers).execute()
@@ -118,34 +134,37 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 		return this.sendBuffer;
 	}
 
-//	public IbvMr getWholeMR(){
+	//	public IbvMr getWholeMR(){
 //		return wholeMR;
 //	}
-public String getEndpointStr() {
-	try {
-		return "src: " + this.getSrcAddr() + " dst: " +
-			this.getDstAddr();
-	}catch (Exception e){
-		LOG.error("Failed to get the address on client endpoint");
-	}
-	return "";
-}
-	public ByteBuffer getReceiveBuffer() {
-		return this.receiveBuffer;
+	public String getEndpointStr() {
+		try {
+			return "src: " + this.getSrcAddr() + " dst: " +
+				this.getDstAddr();
+		} catch (Exception e) {
+			LOG.error("Failed to get the address on client endpoint");
+		}
+		return "";
 	}
 
+//	public ByteBuffer getReceiveBuffer() throws IOException {
+//		ByteBuffer byteBuffer;
+//		byteBuffer = this.recvBuffers.get(0);
+//		return byteBuffer;
+//	}
+
 	public BlockingQueue<IbvWC> getWcEvents() {
-			return wcEvents;
+		return wcEvents;
 	}
 
 	@Override
-	public String toString(){
+	public String toString() {
 		return this.getEndpointStr();
 	}
 
-  public void stop() {
+	public void stop() {
 		try {
-			LOG.info("Server endpoint closed. src: "+ this.getSrcAddr() + " dst: " +this.getDstAddr());
+			LOG.info("Server endpoint closed. src: " + this.getSrcAddr() + " dst: " + this.getDstAddr());
 			this.close();
 		} catch (IOException e) {
 			e.printStackTrace();

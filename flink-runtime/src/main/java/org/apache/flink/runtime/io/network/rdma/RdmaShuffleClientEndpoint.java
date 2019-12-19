@@ -25,28 +25,46 @@ import com.ibm.disni.verbs.IbvWC;
 import com.ibm.disni.verbs.RdmaCmId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sun.nio.ch.DirectBuffer;
+
+import scala.Byte;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
+
+import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 
 import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
 
 public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaShuffleClientEndpoint.class);
+	private int inFlightSendRequests = 2000;
+	private ArrayBlockingQueue<ByteBuffer> freeSendBuffer = new ArrayBlockingQueue<>(2000);
 
 	private int bufferSize; // Todo: set default buffer size
-	private ByteBuffer receiveBuffer; // Todo: add buffer manager with multiple buffers
-	private IbvMr registeredReceiveMemory; // Registered memory for the above buffer
+//	private ByteBuffer receiveBuffer; // Todo: add buffer manager with multiple buffers
+//	private IbvMr registeredReceiveMemory; // Registered memory for the above buffer
+
+	public Map<Long, IbvMr> registeredSendMrs = new HashMap<Long, IbvMr>();
+
+	// should be made public
+	public final Map<Long,ByteBuf> receivedBuffers = new ConcurrentHashMap<>();
+	public Map<Long,ByteBuf> inFlight = new ConcurrentHashMap<Long,ByteBuf>();
+	public Map<Long,ByteBuffer> inFlightSendBufs = new ConcurrentHashMap<>();
+
 
 	private ByteBuffer sendBuffer;
 	private IbvMr registeredSendMemory;
 
-	private ByteBuffer availableFreeReceiveBuffers;
-	private IbvMr availableFreeReceiveBuffersRegisteredMemory;
+//	private ByteBuffer availableFreeReceiveBuffers;
+//	private IbvMr availableFreeReceiveBuffersRegisteredMemory;
 	private PartitionRequestClientHandler clientHandler;
 	private boolean isClosed = false;
 
@@ -98,7 +116,26 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 //			}
 //			lastEvent.set(wc.clone());
 		try {
-			wcEvents.put(RdmaSendReceiveUtil.cloneWC(wc));
+			if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
+//				if (wc.getStatus() == IbvWC.IbvWcStatus.IBV_WC_RNR_RETRY_EXC_ERR.ordinal() ) {
+				if(wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()){
+					long workID = this.workRequestId.incrementAndGet();
+					ByteBuffer sendBufNetty = inFlightSendBufs.remove(wc.getWr_id());
+					this.inFlightSendBufs.put(workID,sendBufNetty);
+					RdmaSendReceiveUtil.postSendReqClient(this, workID,sendBufNetty);
+					LOG.error("Client: Send failed with error {}. reposting new send request request {}" ,wc.getStatus(), this
+						.getEndpointStr());
+
+				}else {
+					ByteBuffer sendBufNetty = inFlightSendBufs.remove(wc.getWr_id());
+					if (sendBufNetty != null) {
+						this.freeSendBuffer.put(sendBufNetty);
+					}
+				}
+//				clientEndpoint.getSendBuffer().clear();
+			}else {
+				wcEvents.put(RdmaSendReceiveUtil.cloneWC(wc));
+			}
 		} catch (InterruptedException e) {
 			throw new IOException(e);
 		}
@@ -107,11 +144,15 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 	public void init() throws IOException {
 		super.init();
 		LOG.info("Allocating client rdma buffers");
-		this.receiveBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
-		this.registeredReceiveMemory = registerMemory(receiveBuffer).execute().getMr(); // register the send buffer
-
-		this.sendBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
-		this.registeredSendMemory = registerMemory(sendBuffer).execute().getMr(); // register the send buffer
+//		this.receiveBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
+//		this.registeredReceiveMemory = registerMemory(receiveBuffer).execute().getMr(); // register the send buffer
+		for (int i = 0; i < inFlightSendRequests; i++) {
+			ByteBuffer sendBuffer = ByteBuffer.allocateDirect(bufferSize);
+			freeSendBuffer.add(sendBuffer);
+			this.registeredSendMrs.put(((DirectBuffer) sendBuffer).address(), registerMemory(sendBuffer).execute().getMr());
+		}
+//		this.sendBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
+//		this.registeredSendMemory = registerMemory(sendBuffer).execute().getMr(); // register the send buffer
 //		this.wholeMR = registerMemory().execute().getMr();
 
 //		LOG.info("Client rkey: %d lkey: %d handle:%d\n",wholeMR.getRkey(),wholeMR.getLkey(),wholeMR.getHandle());
@@ -123,21 +164,21 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 //	public IbvMr getWholeMR(){
 //		return wholeMR;
 //	}
-	public ByteBuffer getReceiveBuffer() {
-		return this.receiveBuffer;
+//	public ByteBuffer getReceiveBuffer() {
+//		return this.receiveBuffer;
+//	}
+
+	public ByteBuffer getSendBuffer() throws InterruptedException {
+		return this.freeSendBuffer.take();
 	}
 
-	public ByteBuffer getSendBuffer() {
-		return this.sendBuffer;
-	}
+//	public IbvMr getRegisteredReceiveMemory() {
+//		return registeredReceiveMemory;
+//	}
 
-	public IbvMr getRegisteredReceiveMemory() {
-		return registeredReceiveMemory;
-	}
-
-	public IbvMr getRegisteredSendMemory() {
-		return registeredSendMemory;
-	}
+//	public IbvMr getRegisteredSendMemory() {
+//		return registeredSendMemory;
+//	}
 
 	public BlockingQueue<IbvWC> getWcEvents() {
 			return wcEvents;
@@ -212,13 +253,13 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 		return "";
 	}
 
-	public ByteBuffer getAvailableFreeReceiveBuffers() {
-		return availableFreeReceiveBuffers;
-	}
-
-	public IbvMr getAvailableFreeReceiveBuffersRegisteredMemory() {
-		return availableFreeReceiveBuffersRegisteredMemory;
-	}
+//	public ByteBuffer getAvailableFreeReceiveBuffers() {
+//		return availableFreeReceiveBuffers;
+//	}
+//
+//	public IbvMr getAvailableFreeReceiveBuffersRegisteredMemory() {
+//		return availableFreeReceiveBuffersRegisteredMemory;
+//	}
 
 	public void terminate() {
 		try {
