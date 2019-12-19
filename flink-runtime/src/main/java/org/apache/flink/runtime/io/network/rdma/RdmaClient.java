@@ -70,7 +70,7 @@ public class RdmaClient implements RdmaEndpointFactory<RdmaShuffleClientEndpoint
 		// we have passed our own endpoint factory to the group, therefore new endpoints will be of type
 		// CustomClientEndpoint
 		// let's create a new client endpoint
-		return new RdmaShuffleClientEndpoint(endpointGroup, idPriv, serverSide, rdmaConfig.getMemorySegmentSize()+100, clientHandler, bufferPool);
+		return new RdmaShuffleClientEndpoint(endpointGroup, idPriv, serverSide, 100, clientHandler, bufferPool);
 	}
 
 //	private void registerMemoryRegions(RdmaShuffleClientEndpoint endpoint) throws IOException {

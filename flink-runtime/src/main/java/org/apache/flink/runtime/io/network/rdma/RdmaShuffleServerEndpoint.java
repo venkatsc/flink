@@ -43,7 +43,7 @@ import org.apache.flink.shaded.netty4.io.netty.buffer.ByteBuf;
 
 public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaShuffleServerEndpoint.class);
-	private int bufferSize = 100; // Todo: set default buffer size
+	private int bufferSize; // Todo: set default buffer size
 	private ByteBuffer sendBuffer; // Todo: add buffer manager with multiple buffers
 	private int recvQueueSize = 2000;
 
