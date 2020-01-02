@@ -50,6 +50,7 @@ public class RdmaServerRequestHandler implements Runnable {
 				RdmaShuffleServerEndpoint clientEndpoint = serverEndpoint.accept();
 				LOG.info("Accepted connection {}", clientEndpoint.getEndpointStr());
 				clientEndpoint.setRegisteredMRs(registerdMRs);
+				clientEndpoint.postRecvBuffers();
 				// TODO (venkat): Handle accepted connection, not using thread pool as it is only proto-type with 4
 				// servers
 				// Should be changed to configurable ThreadPool to work with more nodes.
@@ -59,13 +60,15 @@ public class RdmaServerRequestHandler implements Runnable {
 				HandleClientConnection connectionHandler = new HandleClientConnection(clientEndpoint, queue,
 					inFlightRequests);
 
-				clientEndpoint.setConectionHandler(connectionHandler);
+//				clientEndpoint.setConectionHandler(connectionHandler);
 
-//				Thread wcEventLoop = new Thread(connectionHandler, "work-completion-loop");
-//				wcEventLoop.start();
+				Thread wcEventLoop = new Thread(connectionHandler, "work-completion-loop");
+				wcEventLoop.setPriority(Thread.MAX_PRIORITY);
+				wcEventLoop.start();
 				// data writeout handler
 				RDMAWriter writer = new RDMAWriter(queue, clientEndpoint, inFlightRequests);
 				Thread writerThread = new Thread(writer, "rdma-writer");
+				writerThread.setPriority(Thread.MAX_PRIORITY);
 				writerThread.start();
 			} catch (Exception ie) {
 				Log.error("Failed to handle request", ie);
@@ -116,7 +119,7 @@ public class RdmaServerRequestHandler implements Runnable {
 //		}
 //	}
 
-	public class HandleClientConnection  {
+	public class HandleClientConnection implements Runnable {
 		RdmaShuffleServerEndpoint clientEndpoint;
 		private final PartitionRequestQueue requestQueueOnCurrentConnection;
 
@@ -134,31 +137,26 @@ public class RdmaServerRequestHandler implements Runnable {
 
 		long lastEventID = -1;
 
-		public void handleWC(IbvWC wc) {
+		public void run() {
 			try {
 				boolean clientClose = false;
 				NetworkSequenceViewReader reader = null;
-//				while (!clientClose) {
+				while (!clientClose) {
 					// we need to do writing in seperate thread, otherwise buffers may not be release on
 					// completion events
-//					IbvWC wc = clientEndpoint.getWcEvents().take();
-//					if (lastEventID==-1){
-//						lastEventID = wc.getWr_id();
-//					}else if (lastEventID+1 != wc.getWr_id()){
-//						LOG.info("Server: Did not get expected wr_id {} on endpoint {}", wc.getWr_id(), clientEndpoint
-// .getEndpointStr());
-//					}
-//					synchronized (inFlightVerbs){
-//						inFlightVerbs.remove(wc.getWr_id()).free();
-//					}
+//					LOG.info("take event start" + getEndpointStr(clientEndpoint));
+					IbvWC wc = clientEndpoint.getWcEvents().take();
+//					LOG.info("take event finish" + getEndpointStr(clientEndpoint));
+					LOG.info("opertion: {} wr: {} status: {}", IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()), wc.getWr_id
+						(), IbvWC.IbvWcStatus.valueOf(wc.getStatus()));
 					if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 						if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-							LOG.error("Receive posting failed. reposting new receive request");
+						LOG.error("Receive posting failed. reposting new receive request");
 //							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 						} else { // first receive succeeded. Read the data and repost the next message
-//							LOG.info("Received message from "+getEndpointStr(clientEndpoint));
-							long wc_id=wc.getWr_id();
-							ByteBuffer recvedMsg= clientEndpoint.inFlightRecvs.get(wc_id);
+							LOG.info("Received message from " + getEndpointStr(clientEndpoint));
+							long wc_id = wc.getWr_id();
+							ByteBuffer recvedMsg = clientEndpoint.inFlightRecvs.get(wc_id);
 							NettyMessage clientRequest = decodeMessageFromBuffer(recvedMsg);
 							Class<?> msgClazz = clientRequest.getClass();
 							if (msgClazz == NettyMessage.CloseRequest.class) {
@@ -184,13 +182,13 @@ public class RdmaServerRequestHandler implements Runnable {
 								requestQueueOnCurrentConnection.tryEnqueueReader();
 
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId
-									.incrementAndGet(),recvedMsg); // repost this receive with different work req id
+									.incrementAndGet(), recvedMsg); // repost this receive with different work req id
 								// TODO(venkat): do something better here, we should not poll reader
 							} else if (msgClazz == NettyMessage.TaskEventRequest.class) {
 								NettyMessage.TaskEventRequest request = (NettyMessage.TaskEventRequest) clientRequest;
 								LOG.error("Unhandled request type TaskEventRequest");
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId
-									.incrementAndGet(),recvedMsg); // post next
+									.incrementAndGet(), recvedMsg); // post next
 								// receive
 								// TODO (venkat): Handle it
 								if (!taskEventDispatcher.publish(request.partitionId, request.event)) {
@@ -202,26 +200,28 @@ public class RdmaServerRequestHandler implements Runnable {
 									clientRequest;
 								LOG.error("Unhandled request type CancelPartitionRequest");
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId
-									.incrementAndGet(),recvedMsg); // post next
+									.incrementAndGet(), recvedMsg); // post next
 								// receive
 								// TODO (venkat): Handle it
 //							outboundQueue.cancel(request.receiverId);
 							} else if (msgClazz == NettyMessage.AddCredit.class) {
 								NettyMessage.AddCredit request = (NettyMessage.AddCredit) clientRequest;
 //								NetworkSequenceViewReader reader = readers.get(request.receiverId);
-//								LOG.info("Add credit: credit {} on the {}",request.credit,clientEndpoint
-// .getEndpointStr());
+//								LOG.info("Add credit start: credit {} on the {}", request.credit, clientEndpoint
+//									.getEndpointStr());
 //								requestQueueOnCurrentConnection.canReceiveCredit(false);
 								requestQueueOnCurrentConnection.addCredit(request.receiverId, request.credit);
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId
-									.incrementAndGet(),recvedMsg); // post next
+									.incrementAndGet(), recvedMsg); // post next
+//								LOG.info("Add credit finished: credit {} on the {}", request.credit, clientEndpoint
+//									.getEndpointStr());
 //								requestQueueOnCurrentConnection.canReceiveCredit(true);
 								// receive
 								// TODO (venkat): Handle it
 								// outboundQueue.addCredit(request.receiverId, request.credit);
 							} else {
 								RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, clientEndpoint.workRequestId
-									.incrementAndGet(),recvedMsg); // post next
+									.incrementAndGet(), recvedMsg); // post next
 								// receive
 								LOG.warn("Received unexpected client request: {}", clientRequest);
 							}
@@ -251,15 +251,16 @@ public class RdmaServerRequestHandler implements Runnable {
 						LOG.error("failed to match any condition " + wc.getOpcode());
 					}
 					// TODO: create requested handler
-//				}
+				}
 //				LOG.info("Server for client endpoint closed. src: " + clientEndpoint.getSrcAddr() + " dst: " +
 //					clientEndpoint.getDstAddr());
 //				requestQueueOnCurrentConnection.releaseAllResources();
 //				clientEndpoint.close();
-			} catch (Exception e) {
-				LOG.error("error handling client request ", e);
+				} catch(Exception e){
+					LOG.error("error handling client request ", e);
+				}
 			}
-		}
+//		}
 	}
 
 	private class RDMAWriter implements Runnable {

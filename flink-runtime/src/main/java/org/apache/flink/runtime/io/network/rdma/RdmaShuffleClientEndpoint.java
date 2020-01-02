@@ -57,8 +57,15 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 	// should be made public
 	public final Map<Long,ByteBuf> receivedBuffers = new ConcurrentHashMap<>();
 	public Map<Long,ByteBuf> inFlight = new ConcurrentHashMap<Long,ByteBuf>();
-	public Map<Long,ByteBuffer> inFlightSendBufs = new ConcurrentHashMap<>();
+	private Map<Long,ByteBuffer> inFlightSendBufs = new ConcurrentHashMap<>();
 
+	public void addToInFlightSend(long id, ByteBuffer sendBuffer){
+		inFlightSendBufs.put(id,sendBuffer);
+	}
+
+	public ByteBuffer removeAndGetFromInFlightSend(long id){
+		return inFlightSendBufs.remove(id);
+	}
 
 	private ByteBuffer sendBuffer;
 	private IbvMr registeredSendMemory;
@@ -116,26 +123,7 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 //			}
 //			lastEvent.set(wc.clone());
 		try {
-			if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
-//				if (wc.getStatus() == IbvWC.IbvWcStatus.IBV_WC_RNR_RETRY_EXC_ERR.ordinal() ) {
-				if(wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()){
-					long workID = this.workRequestId.incrementAndGet();
-					ByteBuffer sendBufNetty = inFlightSendBufs.remove(wc.getWr_id());
-					this.inFlightSendBufs.put(workID,sendBufNetty);
-					RdmaSendReceiveUtil.postSendReqClient(this, workID,sendBufNetty);
-					LOG.error("Client: Send failed with error {}. reposting new send request request {}" ,wc.getStatus(), this
-						.getEndpointStr());
-
-				}else {
-					ByteBuffer sendBufNetty = inFlightSendBufs.remove(wc.getWr_id());
-					if (sendBufNetty != null) {
-						this.freeSendBuffer.put(sendBufNetty);
-					}
-				}
-//				clientEndpoint.getSendBuffer().clear();
-			}else {
-				wcEvents.put(RdmaSendReceiveUtil.cloneWC(wc));
-			}
+			wcEvents.put(RdmaSendReceiveUtil.cloneWC(wc));
 		} catch (InterruptedException e) {
 			throw new IOException(e);
 		}
@@ -147,7 +135,7 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 //		this.receiveBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
 //		this.registeredReceiveMemory = registerMemory(receiveBuffer).execute().getMr(); // register the send buffer
 		for (int i = 0; i < inFlightSendRequests; i++) {
-			ByteBuffer sendBuffer = ByteBuffer.allocateDirect(bufferSize);
+			ByteBuffer sendBuffer = ByteBuffer.allocateDirect(8*1024);
 			freeSendBuffer.add(sendBuffer);
 			this.registeredSendMrs.put(((DirectBuffer) sendBuffer).address(), registerMemory(sendBuffer).execute().getMr());
 		}
@@ -170,6 +158,10 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 
 	public ByteBuffer getSendBuffer() throws InterruptedException {
 		return this.freeSendBuffer.take();
+	}
+
+	public void recycleSendBuffer(ByteBuffer buffer){
+		this.freeSendBuffer.add(buffer);
 	}
 
 //	public IbvMr getRegisteredReceiveMemory() {

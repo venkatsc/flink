@@ -91,6 +91,7 @@ class PartitionRequestClientFactory {
 				endpoint, clientHandler);
 			LOG.info(readerClient.toString());
 			Thread clientReaderThread = new Thread(readerClient, "partition-client");
+			clientReaderThread.setPriority(Thread.MAX_PRIORITY);
 			clientReaderThread.start();
 		}else{
 			client.addChannelToClient(channel);

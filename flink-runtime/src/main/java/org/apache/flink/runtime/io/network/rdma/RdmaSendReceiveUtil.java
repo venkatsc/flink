@@ -49,6 +49,7 @@ public class RdmaSendReceiveUtil {
 		.BufferResponse response) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
+			LOG.info("posting server send buffer with wr_id {} on {}", workReqId, endpoint.toString());
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
 //			LOG.info("posting server send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: "
 // +endpoint.getDstAddr());
@@ -168,7 +169,7 @@ public class RdmaSendReceiveUtil {
 		RdmaShuffleClientEndpoint clientEndpoint = (RdmaShuffleClientEndpoint) endpoint;
 //			LOG.info("posting client send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: "
 // +endpoint.getDstAddr());
-		clientEndpoint.inFlightSendBufs.put(workReqId, send);
+		clientEndpoint.addToInFlightSend(workReqId, send);
 		LinkedList<IbvSge> sges = new LinkedList<IbvSge>();
 		IbvSge sendSGE = new IbvSge();
 		long address = ((DirectBuffer) send).address();
@@ -196,8 +197,7 @@ public class RdmaSendReceiveUtil {
 		IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
-//			LOG.info("posting server receive wr_id " + workReqId + " against src: " + endpoint.getSrcAddr() + " dest:
-// " +endpoint.getDstAddr());
+			LOG.info("posting server receive wr_id {} on {}", workReqId, endpoint.toString());
 
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
 			clientEndpoint.inFlightRecvs.put(workReqId, recv);
@@ -216,6 +216,8 @@ public class RdmaSendReceiveUtil {
 			LinkedList<IbvRecvWR> recvWRs = new LinkedList<>();
 			recvWRs.add(recvWR);
 			endpoint.postRecv(recvWRs).execute().free();
+		}else {
+			throw new IOException("Client endpoint not supported by this method");
 		}
 	}
 
@@ -240,6 +242,8 @@ public class RdmaSendReceiveUtil {
 			LinkedList<IbvRecvWR> recvWRs = new LinkedList<>();
 			recvWRs.add(recvWR);
 			endpoint.postRecv(recvWRs).execute().free();
+		}else {
+			throw new IOException("Server endpoint not supported by this method");
 		}
 	}
 

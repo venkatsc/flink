@@ -82,7 +82,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 	private final ConnectionID connectionId;
 
 	private final PartitionRequestClientFactory clientFactory;
-	Map<InputChannelID,RemoteInputChannel> channels = new ConcurrentHashMap<>();
+	Map<InputChannelID, RemoteInputChannel> channels = new ConcurrentHashMap<>();
 
 	/**
 	 * If zero, the underlying TCP channel can be safely closed.
@@ -95,7 +95,7 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 		PartitionRequestClientHandler clientHandler,
 		ConnectionID connectionId,
 		PartitionRequestClientFactory clientFactory, InputChannel channel) {
-		RemoteInputChannel channel1= (RemoteInputChannel)channel;
+		RemoteInputChannel channel1 = (RemoteInputChannel) channel;
 		channels.put(channel1.getInputChannelId(), channel1);
 		this.clientEndpoint = checkNotNull(clientEndpoint);
 		this.clientHandler = checkNotNull(clientHandler);
@@ -103,12 +103,12 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 		this.clientFactory = checkNotNull(clientFactory);
 	}
 
-	public void addChannelToClient(InputChannel channel){
-		RemoteInputChannel channel1= (RemoteInputChannel)channel;
+	public void addChannelToClient(InputChannel channel) {
+		RemoteInputChannel channel1 = (RemoteInputChannel) channel;
 		channels.put(channel1.getInputChannelId(), channel1);
 	}
 
-	public Map<InputChannelID, RemoteInputChannel> getInputChannels(){
+	public Map<InputChannelID, RemoteInputChannel> getInputChannels() {
 		return channels;
 	}
 
@@ -126,6 +126,41 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 		return closeReferenceCounter.increment();
 	}
 
+	public void notifyCreditAvailable(RemoteInputChannel inputChannel) {
+//			if (inputChannel.getUnannouncedCredit() < 200) {
+//				return;
+//			}
+
+		int unannouncedCredit = inputChannel.getAndResetUnannouncedCredit();
+//						LOG.info("Adding credit: {} on channel {}", unannouncedCredit, inputChannel);
+		int failed = postBuffers(unannouncedCredit, inputChannel);
+		NettyMessage.AddCredit msg = new NettyMessage.AddCredit(
+			inputChannel.getPartitionId(),
+			unannouncedCredit - failed,
+			inputChannel.getInputChannelId());
+//				availableCredit += unannouncedCredit;
+		ByteBuf message = null;
+		try {
+			message = msg.write(clientEndpoint.getNettyBufferpool());
+			// TODO: lurcking bug, if credit posted before sending out the previous credit, we might hold
+			ByteBuffer messageBuffer = clientEndpoint.getSendBuffer();
+			messageBuffer.put(message.nioBuffer());
+			long workID = clientEndpoint.workRequestId.incrementAndGet();
+//			clientEndpoint.inFlightSendBufs.put(workID, messageBuffer);
+			RdmaSendReceiveUtil.postSendReqClient(clientEndpoint, workID, messageBuffer);
+			message.release(); // release netty buffer
+			LOG.info("Announced available credit: {} with work_id {} on {}", unannouncedCredit - failed, workID,
+				clientEndpoint.getEndpointStr());
+		} catch (Exception e) {
+			LOG.error("failed sending credit", e);
+		}
+//			}
+//		}
+//		LOG.info("Credit available notification received on channel {}",inputChannel);
+//		clientHandler.notifyCreditAvailable(inputChannel);
+	}
+
+
 	/**
 	 * Requests a remote intermediate result partition queue.
 	 *
@@ -139,16 +174,18 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 		int delayMs) throws IOException {
 
 		checkNotClosed();
-		postBuffers(inputChannel.getInitialCredit(),inputChannel);
+		postBuffers(inputChannel.getInitialCredit(), inputChannel);
 		NettyMessage msg = new NettyMessage.PartitionRequest(
 			partitionId, subpartitionIndex, inputChannel.getInputChannelId(), inputChannel.getInitialCredit());
-		LOG.info("sending partition request {}",msg.toString());
+		LOG.info("sending partition request {} on {}", msg.toString(),clientEndpoint.getEndpointStr());
 		ByteBuf buf;
 		try {
 			buf = msg.write(clientEndpoint.getNettyBufferpool());
 			ByteBuffer sendBuffer = clientEndpoint.getSendBuffer();
 			sendBuffer.put(buf.nioBuffer());
-			RdmaSendReceiveUtil.postSendReqClient(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet(),sendBuffer);
+			RdmaSendReceiveUtil.postSendReqClient(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet(),
+				sendBuffer);
+			buf.release(); // release netty buffer
 		} catch (Exception e) {
 			LOG.error("Failed to serialize partition request {}", e);
 			throw new IOException(e);
@@ -183,34 +220,6 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 //		}
 	}
 
-	public void notifyCreditAvailable(RemoteInputChannel inputChannel) {
-//			if (inputChannel.getUnannouncedCredit() > 0) {
-		int unannouncedCredit = inputChannel.getAndResetUnannouncedCredit();
-//						LOG.info("Adding credit: {} on channel {}", unannouncedCredit, inputChannel);
-		int failed = postBuffers(unannouncedCredit, inputChannel);
-		NettyMessage.AddCredit msg = new NettyMessage.AddCredit(
-			inputChannel.getPartitionId(),
-			unannouncedCredit - failed,
-			inputChannel.getInputChannelId());
-//				availableCredit += unannouncedCredit;
-//				LOG.info("Announced available credit: {} on {}",availableCredit,clientEndpoint.getEndpointStr());
-		ByteBuf message = null;
-		try {
-			message = msg.write(clientEndpoint.getNettyBufferpool());
-			// TODO: lurcking bug, if credit posted before sending out the previous credit, we might hold
-			ByteBuffer messageBuffer = clientEndpoint.getSendBuffer();
-			messageBuffer.put(message.nioBuffer());
-			long workID = clientEndpoint.workRequestId.incrementAndGet();
-			clientEndpoint.inFlightSendBufs.put(workID, messageBuffer);
-			RdmaSendReceiveUtil.postSendReqClient(clientEndpoint, workID, messageBuffer);
-		} catch (Exception e) {
-			LOG.error("failed sending credit", e);
-		}
-//			}
-//		}
-//		LOG.info("Credit available notification received on channel {}",inputChannel);
-//		clientHandler.notifyCreditAvailable(inputChannel);
-	}
 
 	private int postBuffers(int credit, RemoteInputChannel inputChannel) {
 		int failed = 0;
@@ -273,17 +282,17 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 
 class PartitionReaderClient implements Runnable {
 	private static final Logger LOG = LoggerFactory.getLogger(PartitionReaderClient.class);
-//	private ResultPartitionID partitionId;
+	//	private ResultPartitionID partitionId;
 //	private int subpartitionIndex;
 //	private RemoteInputChannel inputChannel;
 //	private int delayMs;
 	private final RdmaShuffleClientEndpoint clientEndpoint;
 	private final PartitionRequestClientHandler clientHandler;
- 	private final Map<InputChannelID,RemoteInputChannel> inputChannels;
+	private final Map<InputChannelID, RemoteInputChannel> inputChannels;
 
 //	private long workRequestId;
 
-	public PartitionReaderClient(final Map<InputChannelID,RemoteInputChannel> inputChannels,
+	public PartitionReaderClient(final Map<InputChannelID, RemoteInputChannel> inputChannels,
 								 RdmaShuffleClientEndpoint clientEndpoint, final
 								 PartitionRequestClientHandler clientHandler) {
 //		this.partitionId = partitionId;
@@ -311,7 +320,8 @@ class PartitionReaderClient implements Runnable {
 //			buf = msg.write(clientEndpoint.getNettyBufferpool());
 //			ByteBuffer sendBuffer = clientEndpoint.getSendBuffer();
 //			sendBuffer.put(buf.nioBuffer());
-//			RdmaSendReceiveUtil.postSendReqClient(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet(),sendBuffer);
+//			RdmaSendReceiveUtil.postSendReqClient(clientEndpoint, clientEndpoint.workRequestId.incrementAndGet(),
+// sendBuffer);
 //		} catch (Exception ioe) {
 //			LOG.error("Failed to serialize partition request {}", ioe);
 //			return;
@@ -326,8 +336,9 @@ class PartitionReaderClient implements Runnable {
 //				LOG.info("took client event with wr_id {} on endpoint {}", wc.getWr_id(), clientEndpoint
 // .getEndpointStr());
 				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
+					LOG.info("recv completed with wr {} status {} ", wc.getWr_id(), wc.getStatus());
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
-						LOG.error("Receive posting failed. reposting new receive request");
+						LOG.error("Receive posting failed with error {}",IbvWC.IbvWcStatus.valueOf(wc.getStatus()));
 					} else {
 						ByteBuf receiveBuffer = clientEndpoint.receivedBuffers.get(wc.getWr_id());
 //						availableCredit--;
@@ -367,6 +378,23 @@ class PartitionReaderClient implements Runnable {
 								default:
 									LOG.error(" Un-identified response type " + ID);
 							}
+						}
+					}
+				} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
+					LOG.info("Send completed with wr {} status {} ", wc.getWr_id(), IbvWC.IbvWcStatus.valueOf(wc.getStatus()));
+//				if (wc.getStatus() == IbvWC.IbvWcStatus.IBV_WC_RNR_RETRY_EXC_ERR.ordinal() ) {
+					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
+						LOG.error("Client: Send failed with error {}. reposting new send request request {}", IbvWC.IbvWcStatus.valueOf(wc.getStatus()), clientEndpoint
+							.getEndpointStr());
+						long workID = clientEndpoint.workRequestId.incrementAndGet();
+						ByteBuffer sendBufNetty = clientEndpoint.removeAndGetFromInFlightSend(wc.getWr_id());
+						clientEndpoint.addToInFlightSend(workID, sendBufNetty);
+						RdmaSendReceiveUtil.postSendReqClient(clientEndpoint, workID, sendBufNetty);
+					} else {
+						ByteBuffer sendBufNetty = clientEndpoint.removeAndGetFromInFlightSend(wc.getWr_id());
+						if (sendBufNetty != null) {
+							sendBufNetty.position(0);
+							clientEndpoint.recycleSendBuffer(sendBufNetty);
 						}
 					}
 				} else {

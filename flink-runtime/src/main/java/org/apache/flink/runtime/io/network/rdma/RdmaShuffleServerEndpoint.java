@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
@@ -47,9 +48,11 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 	private ByteBuffer sendBuffer; // Todo: add buffer manager with multiple buffers
 	private int recvQueueSize = 2000;
 
+	private List<ByteBuffer> recvBuffers = new ArrayList<>(2000);
+
 //	private HashMap<Long,ByteBuffer> recvBuffers = new HashMap<Long, ByteBuffer>(recvQueueSize);
 
-	public HashMap<Long,ByteBuffer> inFlightRecvs = new HashMap<Long, ByteBuffer>(recvQueueSize);
+	public HashMap<Long, ByteBuffer> inFlightRecvs = new HashMap<Long, ByteBuffer>(recvQueueSize);
 //	private IbvMr wholeMR;
 
 	private Map<Long, IbvMr> registeredMRs;
@@ -99,12 +102,17 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 	public RdmaShuffleServerEndpoint(RdmaActiveEndpointGroup<? extends RdmaActiveEndpoint> group, RdmaCmId idPriv,
 									 boolean serverSide, int bufferSize) throws IOException {
 		super(group, idPriv, serverSide);
+		// this is only for connection buffers, data buffers are of segment size in Flink
 		this.bufferSize = bufferSize; // Todo: validate buffer size
 	}
 
 	@Override
 	public void dispatchCqEvent(IbvWC wc) throws IOException {
-		handlerClientConnection.handleWC(wc);
+		try {
+			wcEvents.put(wc.clone());
+		} catch (Exception e) {
+			throw new IOException(e);
+		}
 	}
 
 	public void init() throws IOException {
@@ -112,14 +120,16 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 		LOG.info("Allocating server rdma buffers");
 		this.sendBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
 		for (int i = 0; i < recvQueueSize; i++) {
-			ByteBuffer recvBuffer = ByteBuffer.allocateDirect(bufferSize);
-			this.registeredRecvMrs.put(((DirectBuffer) recvBuffer).address(), registerMemory(recvBuffer).execute().getMr
+			ByteBuffer recvBuffer = ByteBuffer.allocateDirect(8 * 1024);
+			this.registeredRecvMrs.put(((DirectBuffer) recvBuffer).address(), registerMemory(recvBuffer).execute()
+				.getMr
 				());
-			long id= this.workRequestId.incrementAndGet();
-			RdmaSendReceiveUtil.postReceiveReq(this,id,recvBuffer);
+			recvBuffers.add(recvBuffer);
+//			long id= this.workRequestId.incrementAndGet();
+//			RdmaSendReceiveUtil.postReceiveReq(this,id,recvBuffer);
 		}
 
-		this.sendBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
+//		this.sendBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
 		this.registeredSendMemory = registerMemory(sendBuffer).execute().getMr(); // register the send buffer
 //		this.availableFreeReceiveBuffers = ByteBuffer.allocateDirect(2); // TODO: assumption of less receive buffers
 //		this.availableFreeReceiveBuffersRegisteredMemory = registerMemory(availableFreeReceiveBuffers).execute()
@@ -128,6 +138,13 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 		// receive buffers
 //		this.availableFreeReceiveBuffersNotificationRegisteredMemory = registerMemory
 //			(availableFreeReceiveBuffersNotification).execute().getMr();
+	}
+
+	public void postRecvBuffers() throws IOException{
+		for (ByteBuffer recvBuf: recvBuffers) {
+			long id = this.workRequestId.incrementAndGet();
+			RdmaSendReceiveUtil.postReceiveReq(this, id, recvBuf);
+		}
 	}
 
 	public ByteBuffer getSendBuffer() {
