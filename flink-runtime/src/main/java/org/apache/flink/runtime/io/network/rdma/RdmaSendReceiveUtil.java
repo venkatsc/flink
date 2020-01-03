@@ -96,24 +96,6 @@ public class RdmaSendReceiveUtil {
 			dataSGE.setLkey(clientEndpoint.getRegisteredMRs().get(segment.getAddress()).getLkey());
 			sges.add(dataSGE);
 
-//			IbvSge sendSGE1 = new IbvSge();
-//			if (response.getTempBuffer()!=null){ // the buffer is not direct buffer and hence rewritten
-//				sendSGE1.setAddr(response.getTempBuffer().memoryAddress());
-//				sendSGE1.setLength(response.getTempBuffer().readableBytes());
-//				sendSGE1.setLkey(clientEndpoint.getWholeMR().getLkey());
-//				sges.add(sendSGE1);
-////				ByteBuf buf1 =response.getTempBuffer();
-////				LOG.info("sending temp buffer readable:{} capacity:{}",buf1.readableBytes(),buf1.capacity());
-//			}else{
-//				sendSGE1.setAddr(buffer.getMemorySegment().getAddress() + buffer.getMemorySegmentOffset());
-//				sendSGE1.setLength(buffer.writerIndex());
-//				sendSGE1.setLkey(clientEndpoint.getRegisteredMRs().get(buffer.getMemorySegment().getAddress() )
-// .getLkey());
-//				sges.add(sendSGE1);
-////				LOG.info("sending network buffer readable:{} capacity:{} writer index: {} getsize: {}",buffer
-// .readableBytes(),buffer.capacity(),buffer.writerIndex(),buffer.getSize());
-//			}
-
 			// Create send Work Request (WR)
 			IbvSendWR sendWR = new IbvSendWR();
 			sendWR.setWr_id(workReqId);

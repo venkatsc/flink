@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
+import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -123,7 +124,7 @@ class PartitionRequestClientHandler {
 
 	// ------------------------------------------------------------------------
 	public void decodeMsg(Object msg, boolean isStagedBuffer, RdmaShuffleClientEndpoint clientEndpoint,
-						  RemoteInputChannel inputChannel,boolean[] finished) throws
+						  RemoteInputChannel inputChannel, Map<InputChannelID, RemoteInputChannel> inputChannels) throws
 		Throwable {
 		final Class<?> msgClazz = msg.getClass();
 
@@ -139,7 +140,7 @@ class PartitionRequestClientHandler {
 
 			}
 
-			decodeBufferOrEvent(inputChannel, bufferOrEvent, isStagedBuffer, clientEndpoint,finished);
+			decodeBufferOrEvent(inputChannel, bufferOrEvent, isStagedBuffer, clientEndpoint,inputChannels);
 		}
 		// ---- Error ---------------------------------------------------------
 		else if (msgClazz == NettyMessage.ErrorResponse.class) {
@@ -172,7 +173,8 @@ class PartitionRequestClientHandler {
 	}
 
 	private void decodeBufferOrEvent(RemoteInputChannel inputChannel, NettyMessage.BufferResponse bufferOrEvent,
-										boolean isStagedBuffer, RdmaShuffleClientEndpoint clientEndpoint,boolean[] finished) throws
+									 boolean isStagedBuffer, RdmaShuffleClientEndpoint clientEndpoint, Map
+										 <InputChannelID, RemoteInputChannel> inputChannels) throws
 		Throwable {
 //		boolean releaseNettyBuffer = true;
 
@@ -229,7 +231,7 @@ class PartitionRequestClientHandler {
 				final AbstractEvent event = EventSerializer.fromBuffer(networkBuffer, getClass().getClassLoader());
 				if (event.getClass()==EndOfPartitionEvent.class){
 					LOG.info("Received EndOfPartitionEvent ");
-					finished[0]=true;
+					inputChannels.remove(inputChannel.getInputChannelId());
 				}
 			}
 		} finally {

@@ -367,7 +367,7 @@ class PartitionReaderClient implements Runnable {
 //										.sequenceNumber + " receiver id " + bufferOrEvent.receiverId + " backlog: " +
 //										bufferOrEvent.backlog);
 									clientHandler.decodeMsg(bufferOrEvent,
-										false, clientEndpoint, inputChannel, finished);
+										false, clientEndpoint, inputChannel, inputChannels);
 									break;
 								case NettyMessage.CloseRequest.ID:
 									LOG.info("closing on client side upon close request. Something might have gone " +
@@ -409,7 +409,7 @@ class PartitionReaderClient implements Runnable {
 				}
 			}
 		}
-		while (!finished[0]); // TODO(venkat): we should close the connection on reaching
+		while (inputChannels.size()>0); // TODO(venkat): we should close the connection on reaching
 		// EndOfPartitionEvent
 		// waiting would make the partitionRequest being posted after EndOfPartitionEvent. This would hang server
 		// thread

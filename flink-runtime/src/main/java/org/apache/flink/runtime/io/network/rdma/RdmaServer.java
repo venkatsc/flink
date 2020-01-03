@@ -117,7 +117,8 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 		// endpoint.dispatchCqEvent() method.
 		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleServerEndpoint>(10, true, 8000,2000, 2, 50000);
 		endpointGroup.init(this);
-		endpointGroup.getConnParam().setRnr_retry_count((byte) 7);
+//		endpointGroup.getConnParam().set();
+//		endpointGroup.getConnParam().setRnr_retry_count((byte) 7);
 		// create a server endpoint
 		serverEndpoint = endpointGroup.createServerEndpoint();
 
