@@ -49,7 +49,7 @@ public class RdmaSendReceiveUtil {
 		.BufferResponse response) throws IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
-			LOG.info("posting server send buffer with wr_id {} on {}", workReqId, endpoint.toString());
+//			LOG.info("posting server send buffer with wr_id {} on {}", workReqId, endpoint.toString());
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
 //			LOG.info("posting server send wr_id " + workReqId+ " against src: " + endpoint.getSrcAddr() + " dest: "
 // +endpoint.getDstAddr());
@@ -179,7 +179,7 @@ public class RdmaSendReceiveUtil {
 		IOException {
 
 		if (endpoint instanceof RdmaShuffleServerEndpoint) {
-			LOG.info("posting server receive wr_id {} on {}", workReqId, endpoint.toString());
+//			LOG.info("posting server receive wr_id {} on {}", workReqId, endpoint.toString());
 
 			RdmaShuffleServerEndpoint clientEndpoint = (RdmaShuffleServerEndpoint) endpoint;
 			clientEndpoint.inFlightRecvs.put(workReqId, recv);

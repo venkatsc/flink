@@ -147,14 +147,14 @@ public class RdmaServerRequestHandler implements Runnable {
 //					LOG.info("take event start" + getEndpointStr(clientEndpoint));
 					IbvWC wc = clientEndpoint.getWcEvents().take();
 //					LOG.info("take event finish" + getEndpointStr(clientEndpoint));
-					LOG.info("opertion: {} wr: {} status: {}", IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()), wc.getWr_id
-						(), IbvWC.IbvWcStatus.valueOf(wc.getStatus()));
+//					LOG.info("opertion: {} wr: {} status: {}", IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()), wc.getWr_id
+//						(), IbvWC.IbvWcStatus.valueOf(wc.getStatus()));
 					if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
 						if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 						LOG.error("Receive posting failed. reposting new receive request");
 //							RdmaSendReceiveUtil.postReceiveReq(clientEndpoint, ++workRequestId);
 						} else { // first receive succeeded. Read the data and repost the next message
-							LOG.info("Received message from " + getEndpointStr(clientEndpoint));
+//							LOG.info("Received message from " + getEndpointStr(clientEndpoint));
 							long wc_id = wc.getWr_id();
 							ByteBuffer recvedMsg = clientEndpoint.inFlightRecvs.get(wc_id);
 							NettyMessage clientRequest = decodeMessageFromBuffer(recvedMsg);

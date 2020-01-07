@@ -152,7 +152,7 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 	private boolean isAvailable(BufferAndBacklog bufferAndBacklog) {
 		// BEWARE: this must be in sync with #isAvailable()!
 		boolean available = bufferAndBacklog.isMoreAvailable();
-		available = available && numCreditsAvailable.get()>0;
+		available = available && numCreditsAvailable.get() > 0;
 		return  available;
 	}
 

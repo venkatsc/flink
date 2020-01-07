@@ -92,10 +92,11 @@ class PartitionRequestQueue {
 	 * <p>NOTE: Only one thread would trigger the actual enqueue after checking the reader's
 	 * availability, so there is no race condition here.
 	 */
-	private boolean enqueueAvailableReader(final NetworkSequenceViewReader reader) {
-			if (!reader.isAvailable()) {
-				return false;
-			}
+	private synchronized boolean enqueueAvailableReader(final NetworkSequenceViewReader reader) {
+//			if (!reader.isAvailable()) {
+//				return false;
+//			}
+		// let us be optimistic and enqueue it and the dequeuer handles lack of credit and lack of data
 			registerAvailableReader(reader);
 			return true;
 	}
@@ -233,7 +234,7 @@ class PartitionRequestQueue {
 //				}
 				if (next == null) {
 					if (!reader.isReleased()) {
-						continue;
+						return null;
 					}
 					markAsReleased(reader.getReceiverId());
 
@@ -245,6 +246,7 @@ class PartitionRequestQueue {
 
 						return msg;
 					}
+
 				} else {
 					// This channel was now removed from the available reader queue.
 					// We re-add it into the queue if it is still available

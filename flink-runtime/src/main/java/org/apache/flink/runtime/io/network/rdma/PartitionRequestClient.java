@@ -149,8 +149,8 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 //			clientEndpoint.inFlightSendBufs.put(workID, messageBuffer);
 			RdmaSendReceiveUtil.postSendReqClient(clientEndpoint, workID, messageBuffer);
 			message.release(); // release netty buffer
-			LOG.info("Announced available credit: {} with work_id {} on {}", unannouncedCredit - failed, workID,
-				clientEndpoint.getEndpointStr());
+//			LOG.info("Announced available credit: {} with work_id {} on {}", unannouncedCredit - failed, workID,
+//				clientEndpoint.getEndpointStr());
 		} catch (Exception e) {
 			LOG.error("failed sending credit", e);
 		}
@@ -232,8 +232,9 @@ public class PartitionRequestClient implements PartitionRequestClientIf {
 				receiveBuffer = (NetworkBuffer) inputChannel.requestBuffer();
 				if (receiveBuffer != null) {
 					long id = clientEndpoint.workRequestId.incrementAndGet();
-					RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint, id, receiveBuffer);
 					clientEndpoint.receivedBuffers.put(id, receiveBuffer);
+//					LOG.info("Added buffer with wr: {} on channel {}", id,inputChannel);
+					RdmaSendReceiveUtil.postReceiveReqWithChannelBuf(clientEndpoint, id, receiveBuffer);
 				} else {
 					LOG.error("Buffer from the channel is null");
 				}
@@ -336,12 +337,15 @@ class PartitionReaderClient implements Runnable {
 //				LOG.info("took client event with wr_id {} on endpoint {}", wc.getWr_id(), clientEndpoint
 // .getEndpointStr());
 				if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_RECV) {
-					LOG.info("recv completed with wr {} status {} ", wc.getWr_id(), wc.getStatus());
+//					LOG.info("recv completed with wr {} status {} ", wc.getWr_id(), wc.getStatus());
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 						LOG.error("Receive posting failed with error {}",IbvWC.IbvWcStatus.valueOf(wc.getStatus()));
 					} else {
-						ByteBuf receiveBuffer = clientEndpoint.receivedBuffers.get(wc.getWr_id());
+						ByteBuf receiveBuffer = clientEndpoint.receivedBuffers.remove(wc.getWr_id());
 //						availableCredit--;
+						if (receiveBuffer == null){
+							LOG.error("Cannot find the receive buffer for wr_id: ",wc.getWr_id());
+						}
 						receiveBuffer.readerIndex();
 						int segmentSize = ((NetworkBuffer) receiveBuffer).getMemorySegment().size();
 						receiveBuffer.writerIndex(segmentSize);
@@ -381,7 +385,7 @@ class PartitionReaderClient implements Runnable {
 						}
 					}
 				} else if (IbvWC.IbvWcOpcode.valueOf(wc.getOpcode()) == IbvWC.IbvWcOpcode.IBV_WC_SEND) {
-					LOG.info("Send completed with wr {} status {} ", wc.getWr_id(), IbvWC.IbvWcStatus.valueOf(wc.getStatus()));
+//					LOG.info("Send completed with wr {} status {} ", wc.getWr_id(), IbvWC.IbvWcStatus.valueOf(wc.getStatus()));
 //				if (wc.getStatus() == IbvWC.IbvWcStatus.IBV_WC_RNR_RETRY_EXC_ERR.ordinal() ) {
 					if (wc.getStatus() != IbvWC.IbvWcStatus.IBV_WC_SUCCESS.ordinal()) {
 						LOG.error("Client: Send failed with error {}. reposting new send request request {}", IbvWC.IbvWcStatus.valueOf(wc.getStatus()), clientEndpoint
