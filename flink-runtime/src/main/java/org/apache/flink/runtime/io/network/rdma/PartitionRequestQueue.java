@@ -92,10 +92,10 @@ class PartitionRequestQueue {
 	 * <p>NOTE: Only one thread would trigger the actual enqueue after checking the reader's
 	 * availability, so there is no race condition here.
 	 */
-	private synchronized boolean enqueueAvailableReader(final NetworkSequenceViewReader reader) {
-//			if (!reader.isAvailable()) {
-//				return false;
-//			}
+	private boolean enqueueAvailableReader(final NetworkSequenceViewReader reader) {
+			if (!reader.isAvailable()) {
+				return false;
+			}
 		// let us be optimistic and enqueue it and the dequeuer handles lack of credit and lack of data
 			registerAvailableReader(reader);
 			return true;

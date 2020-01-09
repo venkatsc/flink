@@ -134,9 +134,8 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 	@Override
 	public boolean isAvailable() {
 		// BEWARE: this must be in sync with #isAvailable(BufferAndBacklog)!
-		boolean available = hasBuffersAvailable();
-		available = available && numCreditsAvailable.get()>0;
-		return available ;
+		return hasBuffersAvailable() &&
+			(numCreditsAvailable.get() > 0 || subpartitionView.nextBufferIsEvent());
 	}
 
 	/**
@@ -151,9 +150,8 @@ class CreditBasedSequenceNumberingViewReader implements BufferAvailabilityListen
 	 */
 	private boolean isAvailable(BufferAndBacklog bufferAndBacklog) {
 		// BEWARE: this must be in sync with #isAvailable()!
-		boolean available = bufferAndBacklog.isMoreAvailable();
-		available = available && numCreditsAvailable.get() > 0;
-		return  available;
+		return hasBuffersAvailable() &&
+			(numCreditsAvailable.get() > 0 || subpartitionView.nextBufferIsEvent());
 	}
 
 	@Override
