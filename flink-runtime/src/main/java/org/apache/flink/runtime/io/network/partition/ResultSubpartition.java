@@ -152,9 +152,9 @@ public abstract class ResultSubpartition {
 
 	protected int decreaseBuffersInBacklogUnsafe(boolean isBuffer) {
 		assert Thread.holdsLock(buffers);
-		if (isBuffer) {
+//		if (isBuffer) {
 			buffersInBacklog--;
-		}
+//		}
 		return buffersInBacklog;
 	}
 
@@ -165,7 +165,7 @@ public abstract class ResultSubpartition {
 	protected void increaseBuffersInBacklog(BufferConsumer buffer) {
 		assert Thread.holdsLock(buffers);
 
-		if (buffer != null && buffer.isBuffer()) {
+		if (buffer != null ) {
 			buffersInBacklog++;
 		}
 	}

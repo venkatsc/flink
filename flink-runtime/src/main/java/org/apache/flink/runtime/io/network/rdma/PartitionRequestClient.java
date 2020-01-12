@@ -413,7 +413,8 @@ class PartitionReaderClient implements Runnable {
 				}
 			}
 		}
-		while (inputChannels.size()>0); // TODO(venkat): we should close the connection on reaching
+		while (!clientEndpoint.isClosed()); // TODO(venkat): we should close the connection on reaching
+//		LOG.info("Finished processing ");
 		// EndOfPartitionEvent
 		// waiting would make the partitionRequest being posted after EndOfPartitionEvent. This would hang server
 		// thread

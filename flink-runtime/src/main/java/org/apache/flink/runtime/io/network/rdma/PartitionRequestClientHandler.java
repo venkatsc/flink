@@ -230,8 +230,10 @@ class PartitionRequestClientHandler {
 
 				final AbstractEvent event = EventSerializer.fromBuffer(networkBuffer, getClass().getClassLoader());
 				if (event.getClass()==EndOfPartitionEvent.class){
-					LOG.info("Received EndOfPartitionEvent ");
-					inputChannels.remove(inputChannel.getInputChannelId());
+					RemoteInputChannel remoteInputChannel = inputChannels.remove(inputChannel.getInputChannelId());
+					LOG.info("Received EndOfPartitionEvent {}",remoteInputChannel);
+				}else{
+					LOG.info("Received event {}",event.getClass().getSimpleName());
 				}
 			}
 		} finally {

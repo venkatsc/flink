@@ -82,8 +82,11 @@ class PipelinedSubpartition extends ResultSubpartition {
 
 	@Override
 	public void finish(MemorySegment segment) throws IOException {
-		add(EventSerializer.toBufferConsumer(EndOfPartitionEvent.INSTANCE,segment), true);
-		LOG.debug("{}: Finished {}.", parent.getOwningTaskName(), this);
+		BufferConsumer finish = EventSerializer.toBufferConsumer(EndOfPartitionEvent.INSTANCE,segment);
+//		finish.build().
+		boolean finished = add(finish, true);
+//		this.flush();
+		LOG.debug("{}: Finished {} finished success {}.", parent.getOwningTaskName(), this,finished);
 	}
 
 	private boolean add(BufferConsumer bufferConsumer, boolean finish) {
@@ -92,6 +95,7 @@ class PipelinedSubpartition extends ResultSubpartition {
 		final boolean notifyDataAvailable;
 		synchronized (buffers) {
 			if (isFinished || isReleased) {
+				LOG.error("Adding buffer to released or finished subpartition finished: {} released: {}", isFinished,isReleased);
 				bufferConsumer.close();
 				return false;
 			}
@@ -189,7 +193,7 @@ class PipelinedSubpartition extends ResultSubpartition {
 			// will be 2 or more.
 			return new BufferAndBacklog(
 				buffer,
-				isAvailableUnsafe(),
+				isAvailable(),
 				getBuffersInBacklog(),
 				nextBufferIsEventUnsafe());
 		}
@@ -321,6 +325,10 @@ class PipelinedSubpartition extends ResultSubpartition {
 		if (buffers.size() == 1 && buffers.peekLast().isFinished()) {
 			return 1;
 		}
+//		else if (buffers.size() == 1 && !buffers.peekLast().isBuffer()){
+//			// if last buffer waiting around is event, no need to wait for finishing the buffer
+//			return 1;
+//		}
 
 		// We assume that only last buffer is not finished.
 		return Math.max(0, buffers.size() - 1);

@@ -82,7 +82,9 @@ class PartitionRequestQueue {
 
 	void notifyReaderNonEmpty(final NetworkSequenceViewReader reader) {
 		// writer thread queues if the readers are empty
-		enqueueAvailableReader(reader);
+		if (reader.getAvailableCredit()>0) {
+			enqueueAvailableReader(reader);
+		}
 	}
 
 	/**
@@ -93,9 +95,9 @@ class PartitionRequestQueue {
 	 * availability, so there is no race condition here.
 	 */
 	private boolean enqueueAvailableReader(final NetworkSequenceViewReader reader) {
-			if (!reader.isAvailable()) {
-				return false;
-			}
+//			if (!reader.isAvailable()) {
+//				return false;
+//			}
 		// let us be optimistic and enqueue it and the dequeuer handles lack of credit and lack of data
 			registerAvailableReader(reader);
 			return true;
@@ -149,9 +151,10 @@ class PartitionRequestQueue {
 			return;
 		}
 
-		NetworkSequenceViewReader reader = allReaders.get(receiverId);
+		CreditBasedSequenceNumberingViewReader reader = (CreditBasedSequenceNumberingViewReader)allReaders.get(receiverId);
 		if (reader != null) {
 			reader.addCredit(credit);
+			if(reader.hasBuffersAvailable())
 			enqueueAvailableReader(reader);
 				// let writer thread enqueue the data
 			// enqueueing here possibly creates deadlock as registered available check requires here
@@ -214,7 +217,7 @@ class PartitionRequestQueue {
 
 		BufferAndAvailability next = null;
 		try {
-			while (true) {
+//			while (true) {
 
 
 					// No queue with available data. We allow this here, because
@@ -228,11 +231,12 @@ class PartitionRequestQueue {
 					// duplicate enqueue for same credit.
 //					reader.setRegisteredAsAvailable(false);
 					next = reader.getNextBuffer();
-					if (next !=null && next.moreAvailable()){
+					if (next !=null && ( next.moreAvailable() || next.buffersInBacklog()>0)){
 						registerAvailableReader(reader);
 					}
 //				}
 				if (next == null) {
+					// registerAvailableReader(reader); // Should be made available for credit or data
 					if (!reader.isReleased()) {
 						return null;
 					}
@@ -245,8 +249,9 @@ class PartitionRequestQueue {
 							reader.getReceiverId());
 
 						return msg;
+					}else {
+						return null;
 					}
-
 				} else {
 					// This channel was now removed from the available reader queue.
 					// We re-add it into the queue if it is still available
@@ -262,7 +267,7 @@ class PartitionRequestQueue {
 					return msg;
 
 				}
-			}
+//			}
 		} catch (Throwable t) {
 			if (next != null) {
 				next.buffer().recycleBuffer();

@@ -619,7 +619,7 @@ public class SingleInputGate implements InputGate {
 					hasReceivedAllEndOfPartitionEvents = true;
 				}
 
-				LOG.debug("End of partition event received. Releasing resources on the channel" + currentChannel);
+				LOG.info("End of partition event received. Releasing resources on the channel" + currentChannel);
 				currentChannel.notifySubpartitionConsumed();
 				currentChannel.releaseAllResources();
 			}else if (WorkerDoneEvent.class.equals(event.getClass())){
