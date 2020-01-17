@@ -49,7 +49,7 @@ public class NetworkBuffer extends AbstractReferenceCountedByteBuf implements Bu
 	private final MemorySegment memorySegment;
 
 	/** The recycler for the backing {@link MemorySegment}. */
-	private final BufferRecycler recycler;
+	private BufferRecycler recycler;
 
 	/** Whether this buffer represents a buffer or an event. */
 	private boolean isBuffer;
@@ -140,6 +140,9 @@ public class NetworkBuffer extends AbstractReferenceCountedByteBuf implements Bu
 	@Override
 	public BufferRecycler getRecycler(){
 		return recycler;
+	}
+	public void setRecycler(BufferRecycler recycler){
+		this.recycler=recycler;
 	}
 
 	@Override

@@ -39,6 +39,7 @@ package org.apache.flink.runtime.io.network.rdma;
 import org.apache.flink.runtime.event.TaskEvent;
 import org.apache.flink.runtime.io.network.ConnectionID;
 import org.apache.flink.runtime.io.network.PartitionRequestClientIf;
+import org.apache.flink.runtime.io.network.buffer.BufferRecycler;
 import org.apache.flink.runtime.io.network.buffer.NetworkBuffer;
 import org.apache.flink.runtime.io.network.netty.exception.LocalTransportException;
 import org.apache.flink.runtime.io.network.partition.ResultPartitionID;
@@ -364,6 +365,13 @@ class PartitionReaderClient implements Runnable {
 										(receiveBuffer);
 									InputChannelID receiverId = bufferOrEvent.receiverId;
 									RemoteInputChannel inputChannel = inputChannels.get(receiverId);
+									BufferRecycler recycler = ((NetworkBuffer) receiveBuffer).getRecycler();
+
+									if ( recycler instanceof RemoteInputChannel){
+										if (!recycler.equals(inputChannel)){ //realign recycler to the correct input channel
+											((NetworkBuffer) receiveBuffer).setRecycler(inputChannel);
+										}
+									}
 //									availableCredit = bufferOrEvent.availableCredit;
 //									canSendCredit = bufferOrEvent.canRecvCredit;
 //									LOG.info("Receive complete: " + wc.getWr_id() + "buff address: "+ receiveBuffer

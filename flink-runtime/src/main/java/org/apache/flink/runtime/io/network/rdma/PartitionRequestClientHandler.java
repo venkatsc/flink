@@ -227,7 +227,7 @@ class PartitionRequestClientHandler {
 				MemorySegment memSeg = MemorySegmentFactory.wrap(byteArray);
 				Buffer networkBuffer = new NetworkBuffer(memSeg, FreeingBufferRecycler.INSTANCE, false, receivedSize);
 				inputChannel.onBuffer(networkBuffer, bufferOrEvent.sequenceNumber, -1);
-
+				buffer.release();
 				final AbstractEvent event = EventSerializer.fromBuffer(networkBuffer, getClass().getClassLoader());
 				if (event.getClass()==EndOfPartitionEvent.class){
 					RemoteInputChannel remoteInputChannel = inputChannels.remove(inputChannel.getInputChannelId());
@@ -235,6 +235,7 @@ class PartitionRequestClientHandler {
 				}else{
 					LOG.info("Received event {}",event.getClass().getSimpleName());
 				}
+//				bufferOrEvent.releaseBuffer();
 			}
 		} finally {
 //			if (releaseNettyBuffer) { RDMA code does not have a copy, so this buffer should be release after processing

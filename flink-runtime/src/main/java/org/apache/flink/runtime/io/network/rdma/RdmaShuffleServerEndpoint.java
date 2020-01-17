@@ -46,9 +46,9 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaShuffleServerEndpoint.class);
 	private int bufferSize; // Todo: set default buffer size
 	private ByteBuffer sendBuffer; // Todo: add buffer manager with multiple buffers
-	private int recvQueueSize = 2000;
+	public static int recvQueueSize = 5000;
 
-	private List<ByteBuffer> recvBuffers = new ArrayList<>(2000);
+	private List<ByteBuffer> recvBuffers = new ArrayList<>(recvQueueSize);
 
 //	private HashMap<Long,ByteBuffer> recvBuffers = new HashMap<Long, ByteBuffer>(recvQueueSize);
 
@@ -120,7 +120,7 @@ public class RdmaShuffleServerEndpoint extends RdmaActiveEndpoint {
 		LOG.info("Allocating server rdma buffers");
 		this.sendBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
 		for (int i = 0; i < recvQueueSize; i++) {
-			ByteBuffer recvBuffer = ByteBuffer.allocateDirect(8 * 1024);
+			ByteBuffer recvBuffer = ByteBuffer.allocateDirect(100);
 			this.registeredRecvMrs.put(((DirectBuffer) recvBuffer).address(), registerMemory(recvBuffer).execute()
 				.getMr
 				());

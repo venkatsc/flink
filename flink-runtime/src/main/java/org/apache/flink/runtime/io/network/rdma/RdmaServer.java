@@ -115,7 +115,7 @@ public class RdmaServer implements RdmaEndpointFactory<RdmaShuffleServerEndpoint
 	public void start(Map<Long, IbvMr> registerdMRs) throws IOException {
 		// create a EndpointGroup. The RdmaActiveEndpointGroup contains CQ processing and delivers CQ event to the
 		// endpoint.dispatchCqEvent() method.
-		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleServerEndpoint>(10, true, 8000,2000, 2, 50000);
+		endpointGroup = new RdmaActiveEndpointGroup<RdmaShuffleServerEndpoint>(10, true, 8000,RdmaShuffleServerEndpoint.recvQueueSize, 2, 50000);
 		endpointGroup.init(this);
 //		endpointGroup.getConnParam().set();
 //		endpointGroup.getConnParam().setRnr_retry_count((byte) 7);

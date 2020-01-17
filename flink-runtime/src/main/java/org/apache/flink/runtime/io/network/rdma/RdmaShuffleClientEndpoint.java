@@ -45,8 +45,8 @@ import org.apache.flink.runtime.io.network.netty.NettyBufferPool;
 
 public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 	private static final Logger LOG = LoggerFactory.getLogger(RdmaShuffleClientEndpoint.class);
-	private int inFlightSendRequests = 2000;
-	private ArrayBlockingQueue<ByteBuffer> freeSendBuffer = new ArrayBlockingQueue<>(2000);
+	public static int inFlightSendRequests = 5000;
+	private ArrayBlockingQueue<ByteBuffer> freeSendBuffer = new ArrayBlockingQueue<>(inFlightSendRequests);
 
 	private int bufferSize; // Todo: set default buffer size
 //	private ByteBuffer receiveBuffer; // Todo: add buffer manager with multiple buffers
@@ -135,7 +135,7 @@ public class RdmaShuffleClientEndpoint extends RdmaActiveEndpoint {
 //		this.receiveBuffer = ByteBuffer.allocateDirect(bufferSize); // allocate buffer
 //		this.registeredReceiveMemory = registerMemory(receiveBuffer).execute().getMr(); // register the send buffer
 		for (int i = 0; i < inFlightSendRequests; i++) {
-			ByteBuffer sendBuffer = ByteBuffer.allocateDirect(8*1024);
+			ByteBuffer sendBuffer = ByteBuffer.allocateDirect(100);
 			freeSendBuffer.add(sendBuffer);
 			this.registeredSendMrs.put(((DirectBuffer) sendBuffer).address(), registerMemory(sendBuffer).execute().getMr());
 		}
