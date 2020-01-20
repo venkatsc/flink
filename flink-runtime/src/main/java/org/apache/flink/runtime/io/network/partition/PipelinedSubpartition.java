@@ -193,7 +193,7 @@ class PipelinedSubpartition extends ResultSubpartition {
 			// will be 2 or more.
 			return new BufferAndBacklog(
 				buffer,
-				isAvailable(),
+				isAvailableUnsafe(),
 				getBuffersInBacklog(),
 				nextBufferIsEventUnsafe());
 		}
