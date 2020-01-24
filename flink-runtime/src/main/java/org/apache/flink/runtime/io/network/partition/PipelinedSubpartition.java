@@ -325,10 +325,10 @@ class PipelinedSubpartition extends ResultSubpartition {
 		if (buffers.size() == 1 && buffers.peekLast().isFinished()) {
 			return 1;
 		}
-//		else if (buffers.size() == 1 && !buffers.peekLast().isBuffer()){
-//			// if last buffer waiting around is event, no need to wait for finishing the buffer
-//			return 1;
-//		}
+		else if (buffers.size() == 1 && !buffers.peekLast().isBuffer()){
+			// if the last buffer is event
+			return 1;
+		}
 
 		// We assume that only last buffer is not finished.
 		return Math.max(0, buffers.size() - 1);
