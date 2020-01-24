@@ -82,9 +82,9 @@ class PartitionRequestQueue {
 
 	void notifyReaderNonEmpty(final NetworkSequenceViewReader reader) {
 		// writer thread queues if the readers are empty
-//		if (reader.getAvailableCredit()>0) {
+		if (reader.getAvailableCredit()>0) {
 			enqueueAvailableReader(reader);
-//		}
+		}
 	}
 
 	/**
@@ -95,9 +95,9 @@ class PartitionRequestQueue {
 	 * availability, so there is no race condition here.
 	 */
 	private boolean enqueueAvailableReader(final NetworkSequenceViewReader reader) {
-			if (!reader.isAvailable()) {
-				return false;
-			}
+//			if (!reader.isAvailable()) {
+//				return false;
+//			}
 		// let us be optimistic and enqueue it and the dequeuer handles lack of credit and lack of data
 			registerAvailableReader(reader);
 			return true;
@@ -154,7 +154,7 @@ class PartitionRequestQueue {
 		CreditBasedSequenceNumberingViewReader reader = (CreditBasedSequenceNumberingViewReader)allReaders.get(receiverId);
 		if (reader != null) {
 			reader.addCredit(credit);
-//			if(reader.hasBuffersAvailable())
+			if(reader.hasBuffersAvailable())
 			enqueueAvailableReader(reader);
 				// let writer thread enqueue the data
 			// enqueueing here possibly creates deadlock as registered available check requires here
